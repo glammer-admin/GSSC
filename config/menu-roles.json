@@ -1,0 +1,77 @@
+{
+  "roles": {
+    "Proveedor": {
+      "name": "Proveedor",
+      "defaultRoute": "/customer-dash",
+      "menu": [
+        {
+          "id": "dashboard",
+          "icon": "Home",
+          "label": "Dashboard",
+          "href": "/customer-dash"
+        },
+        {
+          "id": "proyectos",
+          "icon": "FileText",
+          "label": "Proyectos",
+          "href": "/customer-dash/projects"
+        },
+        {
+          "id": "clientes",
+          "icon": "Users",
+          "label": "Clientes",
+          "href": "/customer-dash/clients"
+        },
+        {
+          "id": "calendario",
+          "icon": "Calendar",
+          "label": "Calendario",
+          "href": "/customer-dash/calendar"
+        }
+      ]
+    },
+    "Organizador": {
+      "name": "Organizador",
+      "defaultRoute": "/dashboard",
+      "menu": [
+        {
+          "id": "dashboard",
+          "icon": "Home",
+          "label": "Dashboard",
+          "href": "/dashboard"
+        },
+        {
+          "id": "proyectos",
+          "icon": "FileText",
+          "label": "Proyectos",
+          "href": "/dashboard/projects"
+        },
+        {
+          "id": "pagos",
+          "icon": "DollarSign",
+          "label": "Pagos",
+          "href": "/dashboard/payments"
+        },
+        {
+          "id": "configuracion",
+          "icon": "Settings",
+          "label": "Configuración",
+          "href": "/dashboard/settings"
+        }
+      ]
+    },
+    "Pagador": {
+      "name": "Pagador",
+      "defaultRoute": "/product/1234asdf",
+      "menu": [
+        {
+          "id": "historial",
+          "icon": "History",
+          "label": "Historial",
+          "href": "/product/1234asdf"
+        }
+      ]
+    }
+  }
+}
+
