@@ -1,34 +1,78 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { getDefaultRouteByRole } from "@/lib/menu-config"
 import { generateMockToken } from "@/lib/auth/mock-sso"
 import { isDevelopment } from "@/lib/config/env"
+import { signInWithGoogle } from "@/lib/auth/google-oauth"
+import { signInWithMicrosoft } from "@/lib/auth/microsoft-oauth"
 
 export function LoginForm() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
+  const [useRealSSO, setUseRealSSO] = useState(false)
+  const [googleClientId, setGoogleClientId] = useState<string>("")
+  const [microsoftClientId, setMicrosoftClientId] = useState<string>("")
+  const [error, setError] = useState<string | null>(null)
+
+  // Verificar si hay credenciales configuradas
+  useEffect(() => {
+    // Google
+    const googleId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    if (googleId && googleId !== "your-google-client-id.apps.googleusercontent.com") {
+      setGoogleClientId(googleId)
+      setUseRealSSO(true)
+      console.log("✅ [GOOGLE] Credenciales configuradas, SSO real disponible")
+    }
+    
+    // Microsoft
+    const msId = process.env.NEXT_PUBLIC_MICROSOFT_CLIENT_ID
+    if (msId && msId !== "your-microsoft-client-id") {
+      setMicrosoftClientId(msId)
+      console.log("✅ [MICROSOFT] Credenciales configuradas, SSO real disponible")
+    }
+    
+    if (!googleId && !msId) {
+      console.log("🎭 [DEV] Usando Mock SSO (no hay credenciales)")
+    }
+  }, [])
 
   const handleSSOLogin = async (provider: string) => {
     setLoading(true)
     setSelectedProvider(provider)
+    setError(null) // Limpiar errores anteriores
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1200))
-
-      // En desarrollo, generar token mock
       let idToken: string
-      if (isDevelopment()) {
-        console.log("🎭 [DEV] Generando token mock para desarrollo")
-        idToken = generateMockToken(provider as "google" | "microsoft" | "meta")
+
+      // Usar SSO real para Google si está configurado
+      if (provider === "google" && useRealSSO && googleClientId) {
+        console.log("🔒 [GOOGLE] Iniciando Google Sign-In real...")
+        console.log("🔒 [GOOGLE] Client ID:", googleClientId.substring(0, 20) + "...")
+        
+        // Google usa redirect completo, no retorna inmediatamente
+        // El flujo continúa en /api/auth/google/callback
+        await signInWithGoogle(googleClientId)
+        
+        // Este código no se ejecutará porque signInWithGoogle hace un redirect
+        return
+      } else if (provider === "microsoft" && microsoftClientId) {
+        console.log("🔒 [MICROSOFT] Iniciando Microsoft Sign-In real...")
+        console.log("🔒 [MICROSOFT] Client ID:", microsoftClientId.substring(0, 20) + "...")
+        
+        // Microsoft usa redirect completo, no retorna inmediatamente
+        // El flujo continúa en /api/auth/microsoft/callback
+        await signInWithMicrosoft(microsoftClientId)
+        
+        // Este código no se ejecutará porque signInWithMicrosoft hace un redirect
+        return
       } else {
-        // En staging/producción, usar SDK real del proveedor
-        console.log("🔒 [PROD] Obteniendo token real de SSO")
-        // TODO: Implementar obtención de token real con SDK
-        // Por ahora, lanzar error para que se implemente
-        throw new Error("SSO real no implementado aún. Configura los SDKs de SSO.")
+        // Usar Mock SSO
+        console.log(`🎭 [DEV] Generando token mock para ${provider}`)
+        await new Promise((resolve) => setTimeout(resolve, 800))
+        idToken = generateMockToken(provider as "google" | "microsoft" | "meta")
       }
 
       // Enviar token al backend para validación
@@ -51,13 +95,14 @@ export function LoginForm() {
         router.push(data.redirect)
       } else {
         console.error("Login failed:", data)
-        alert(`Error de login: ${data.message || "Error desconocido"}`)
+        setError(data.message || "Error al procesar la autenticación. Por favor, intenta nuevamente.")
         setLoading(false)
         setSelectedProvider(null)
       }
     } catch (error) {
       console.error("SSO Login error:", error)
-      alert(`Error: ${error instanceof Error ? error.message : "Error de conexión"}`)
+      const errorMessage = error instanceof Error ? error.message : "Error de conexión con el servidor"
+      setError(`Error de autenticación: ${errorMessage}`)
       setLoading(false)
       setSelectedProvider(null)
     }
@@ -105,10 +150,9 @@ export function LoginForm() {
         <CardContent className="pt-8 pb-8">
           {/* Logo y titulo */}
           <div className="mb-8 text-center">
-            <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
+            <div className="inline-flex items-center justify-center w-48 h-48 mb-4">
               <img src="/logo.svg" alt="Logo" className="w-full h-full object-contain" />
             </div>
-            <p className="text-secondary text-sm">Gestión y Seguimiento de Servicios al Cliente</p>
           </div>
 
           {/* Divider */}
@@ -150,13 +194,39 @@ export function LoginForm() {
             ))}
           </div>
 
-          {/* Demo Info */}
-          <div className="p-4 bg-muted/20 border-2 border-muted rounded-lg">
-            <p className="text-muted font-semibold mb-1 text-xs">MODO DEMOSTRACIÓN</p>
-            <p className="text-foreground/70 text-xs">
-              Haz clic en cualquier botón SSO para simular el login y ver todas las interacciones del dashboard.
-            </p>
-          </div>
+          {/* Error Message */}
+          {error && (
+            <div className="p-4 bg-destructive/10 border-2 border-destructive/50 rounded-lg animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-start gap-3">
+                <svg 
+                  className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
+                  />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-destructive font-semibold mb-1 text-sm">Error de Autenticación</p>
+                  <p className="text-destructive/90 text-xs leading-relaxed">{error}</p>
+                </div>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-destructive/70 hover:text-destructive transition-colors"
+                  aria-label="Cerrar mensaje de error"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

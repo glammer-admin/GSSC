@@ -148,20 +148,36 @@ export async function validateMicrosoftToken(token: string): Promise<TokenPayloa
     // Importar la clave pública
     const publicKey = await importJWK(key, key.alg)
 
-    // Verificar el token
+    // Verificar el token - Microsoft usa /common para multi-tenant
     const { payload } = await jwtVerify(token, publicKey, {
-      issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID}/v2.0`,
       audience: process.env.MICROSOFT_CLIENT_ID,
+      // No validar issuer específico porque usamos /common (multi-tenant)
     })
 
-    // Validar campos requeridos
-    if (!payload.sub || !payload.email) {
-      throw new Error("Missing required fields in token")
+    console.log("🔍 [MICROSOFT] Token payload:", payload)
+
+    // Validar campos requeridos - Microsoft puede usar 'preferred_username' en lugar de 'email'
+    if (!payload.sub) {
+      throw new Error("Missing sub field in token")
     }
 
-    return payload as TokenPayload
+    // Microsoft puede tener el email en diferentes campos
+    const email = (payload.email || payload.preferred_username || payload.upn) as string
+    if (!email) {
+      throw new Error("Missing email field in token")
+    }
+
+    // Normalizar el payload
+    return {
+      ...payload,
+      email,
+      name: payload.name || email,
+    } as TokenPayload
   } catch (error) {
-    console.error("Microsoft token validation error:", error)
+    console.error("❌ [MICROSOFT] Token validation error:", error)
+    if (error instanceof Error) {
+      throw new Error(`Invalid Microsoft token: ${error.message}`)
+    }
     throw new Error("Invalid Microsoft token")
   }
 }

@@ -87,9 +87,22 @@ export async function verifySessionToken(token: string): Promise<SessionData> {
  * Configuración adaptada según el ambiente
  */
 export async function setSessionCookie(sessionData: Omit<SessionData, "iat" | "exp">): Promise<void> {
+  console.log("🍪 [SESSION] Creating session token for:", sessionData.email)
+  
   const token = await createSessionToken(sessionData)
+  console.log("🍪 [SESSION] Token created, length:", token.length)
+  
   const cookieStore = await cookies()
   const config = getConfig()
+
+  console.log("🍪 [SESSION] Cookie config:", {
+    name: SESSION_COOKIE_NAME,
+    httpOnly: true,
+    secure: config.secureCookies,
+    sameSite: "lax",
+    maxAge: config.sessionDuration,
+    path: "/"
+  })
 
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true, // No accesible desde JavaScript
@@ -98,6 +111,12 @@ export async function setSessionCookie(sessionData: Omit<SessionData, "iat" | "e
     maxAge: config.sessionDuration, // Duración basada en ambiente
     path: "/", // Disponible en toda la app
   })
+  
+  console.log("✅ [SESSION] Cookie set successfully")
+  
+  // Verificar que se guardó
+  const verification = cookieStore.get(SESSION_COOKIE_NAME)
+  console.log("🔍 [SESSION] Cookie verification:", !!verification)
 }
 
 /**

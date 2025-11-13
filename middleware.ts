@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSession, refreshSession, isSessionExpiringSoon, SESSION_COOKIE_NAME } from "@/lib/auth/session-manager"
 
 // Rutas que NO requieren autenticación (pero pueden redirigir si ya hay sesión)
-const PUBLIC_ROUTES = ["/api/auth/login", "/api/auth/callback", "/api/auth/logout"]
+const PUBLIC_ROUTES = [
+  "/api/auth/login",
+  "/api/auth/callback",
+  "/api/auth/logout",
+  "/api/auth/session",
+  "/api/auth/google/callback",
+  "/api/auth/google/token",
+  "/api/auth/microsoft/callback",
+  "/api/auth/microsoft/token",
+]
 
 // Rutas de API que requieren autenticación
 const PROTECTED_API_ROUTES = ["/api/protected"]

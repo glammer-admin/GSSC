@@ -52,14 +52,14 @@ export const envConfig = {
     useRealSSO: true,
     sessionDuration: 24 * 60 * 60, // 24 horas
     logLevel: "info",
-    apiUrl: process.env.NEXT_PUBLIC_STAGING_URL || "https://staging.glamur-ssc.com",
+    apiUrl: process.env.NEXT_PUBLIC_STAGING_URL || "https://stagin-gssc.glam-urban.com/",
     secureCookies: true,
   },
   production: {
     useRealSSO: true,
     sessionDuration: 12 * 60 * 60, // 12 horas
     logLevel: "error",
-    apiUrl: process.env.NEXT_PUBLIC_PRODUCTION_URL || "https://app.glamur-ssc.com",
+    apiUrl: process.env.NEXT_PUBLIC_PRODUCTION_URL || "https://gssc.glam-urban.com/",
     secureCookies: true,
   },
 }
