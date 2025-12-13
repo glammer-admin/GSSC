@@ -22,74 +22,75 @@ export interface MenuConfig {
 }
 
 // Configuración de menús por rol
+// Roles: buyer (Comprador), organizer (Organizador), supplier (Proveedor)
 export const menuConfig: MenuConfig = {
-  Proveedor: [
+  supplier: [
     {
       id: "dashboard",
       icon: Home,
       label: "Dashboard",
       href: "/customer-dash",
-      roles: ["Proveedor"],
+      roles: ["supplier"],
     },
     {
       id: "proyectos",
       icon: FileText,
       label: "Proyectos",
       href: "/customer-dash/projects",
-      roles: ["Proveedor"],
+      roles: ["supplier"],
     },
     {
       id: "clientes",
       icon: Users,
       label: "Clientes",
       href: "/customer-dash/clients",
-      roles: ["Proveedor"],
+      roles: ["supplier"],
     },
     {
       id: "calendario",
       icon: Calendar,
       label: "Calendario",
       href: "/customer-dash/calendar",
-      roles: ["Proveedor"],
+      roles: ["supplier"],
     },
   ],
-  Organizador: [
+  organizer: [
     {
       id: "dashboard",
       icon: Home,
       label: "Dashboard",
       href: "/dashboard",
-      roles: ["Organizador"],
+      roles: ["organizer"],
     },
     {
       id: "proyectos",
       icon: FileText,
       label: "Proyectos",
       href: "/dashboard/projects",
-      roles: ["Organizador"],
+      roles: ["organizer"],
     },
     {
       id: "pagos",
       icon: DollarSign,
       label: "Pagos",
       href: "/dashboard/payments",
-      roles: ["Organizador"],
+      roles: ["organizer"],
     },
     {
       id: "configuracion",
       icon: Settings,
       label: "Configuración",
       href: "/dashboard/settings",
-      roles: ["Organizador"],
+      roles: ["organizer"],
     },
   ],
-  Pagador: [
+  buyer: [
     {
       id: "historial",
       icon: History,
       label: "Historial",
       href: "/product/1234asdf",
-      roles: ["Pagador"],
+      roles: ["buyer"],
     },
   ],
 }

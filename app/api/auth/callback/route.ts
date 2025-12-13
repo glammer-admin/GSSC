@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import { validateIdToken } from "@/lib/auth/jwt-validator"
-import { setSessionCookie } from "@/lib/auth/session-manager"
+import { 
+  setSessionCookie, 
+  setTemporarySessionCookie,
+  deleteSession,
+  type SessionRole 
+} from "@/lib/auth/session-manager"
+import { getUsersClient } from "@/lib/http/users/users-client"
+import { 
+  ROLE_DASHBOARD_MAP,
+  type UserRole 
+} from "@/lib/http/users/types"
+import { HttpError, NetworkError } from "@/lib/http/client"
+import { ERROR_CODES, formatErrorLog } from "@/lib/errors/error-codes"
 
 /**
  * POST /api/auth/callback
  * Endpoint para recibir y validar el ID Token del proveedor SSO
+ * Luego valida el usuario en la BD y determina el flujo apropiado
  */
 export async function POST(request: NextRequest) {
   try {
@@ -57,69 +70,207 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 5. Asignar rol basado en el proveedor (lógica de negocio)
-    const roleMap = {
-      google: "Organizador" as const,
-      microsoft: "Proveedor" as const,
-      meta: "Pagador" as const,
-    }
-    const role = roleMap[provider]
-
-    console.log("👤 [AUTH CALLBACK] Assigning role:", role)
-
-    // 6. Crear sesión segura con cookie HttpOnly
-    console.log("🍪 [AUTH CALLBACK] Creating session cookie...")
+    // 5. Consultar usuario en la base de datos externa
+    console.log("🔍 [AUTH CALLBACK] Looking up user in database...")
     
+    let dbUser = null
     try {
+      const usersClient = getUsersClient()
+      dbUser = await usersClient.getUserByEmail(email)
+    } catch (dbError) {
+      // Manejar errores de BD con códigos específicos
+      console.error("❌ [AUTH CALLBACK] Database error:", dbError)
+      
+      // Eliminar cualquier cookie de sesión creada
+      await deleteSession()
+      
+      // Determinar el tipo de error y código correspondiente
+      if (dbError instanceof NetworkError) {
+        const errorCode = ERROR_CODES.AUTH_NET_001.code
+        console.error(formatErrorLog(errorCode, dbError.message))
+        return NextResponse.json(
+          {
+            error: true,
+            message: ERROR_CODES.AUTH_NET_001.userMessage,
+            redirect: `/error?code=${errorCode}`,
+          },
+          { status: 503 }
+        )
+      }
+      
+      if (dbError instanceof HttpError && dbError.status >= 500) {
+        const errorCode = ERROR_CODES.AUTH_SRV_001.code
+        console.error(formatErrorLog(errorCode, `HTTP ${dbError.status}: ${dbError.statusText}`))
+        return NextResponse.json(
+          {
+            error: true,
+            message: ERROR_CODES.AUTH_SRV_001.userMessage,
+            redirect: `/error?code=${errorCode}`,
+          },
+          { status: 503 }
+        )
+      }
+      
+      // Error genérico de BD
+      const errorCode = ERROR_CODES.ERR_GEN_000.code
+      console.error(formatErrorLog(errorCode, dbError instanceof Error ? dbError.message : "Unknown database error"))
+      return NextResponse.json(
+        {
+          error: true,
+          message: ERROR_CODES.ERR_GEN_000.userMessage,
+          redirect: `/error?code=${errorCode}`,
+        },
+        { status: 500 }
+      )
+    }
+
+    // 6. Determinar flujo según estado del usuario
+    if (!dbUser) {
+      // CASO: Usuario nuevo - necesita onboarding
+      console.log("👤 [AUTH CALLBACK] New user detected, redirecting to onboarding")
+      
+      await setTemporarySessionCookie({
+        sub,
+        email,
+        name,
+        picture,
+        provider,
+        role: null,
+        needsOnboarding: true,
+      })
+
+      return NextResponse.json(
+        {
+          success: true,
+          user: { sub, email, name, picture },
+          needsOnboarding: true,
+          redirect: "/onboarding",
+        },
+        { status: 200 }
+      )
+    }
+
+    // Usuario existe en BD
+    const userRoles = dbUser.role
+    console.log("👤 [AUTH CALLBACK] Existing user found with roles:", userRoles)
+
+    if (userRoles.length === 0) {
+      // CASO: Usuario sin roles (no debería pasar, pero manejamos el caso)
+      console.warn("⚠️ [AUTH CALLBACK] User has no roles, redirecting to onboarding")
+      
+      await setTemporarySessionCookie({
+        sub,
+        email,
+        name,
+        picture,
+        provider,
+        role: null,
+        needsOnboarding: true,
+      })
+
+      return NextResponse.json(
+        {
+          success: true,
+          user: { sub, email, name, picture },
+          needsOnboarding: true,
+          redirect: "/onboarding",
+        },
+        { status: 200 }
+      )
+    }
+
+    if (userRoles.length === 1) {
+      // CASO: Usuario con un solo rol - acceso directo
+      const userRole = userRoles[0] as UserRole
+      const redirectUrl = ROLE_DASHBOARD_MAP[userRole]
+
+      console.log("✅ [AUTH CALLBACK] Single role user, assigning role:", userRole)
+
       await setSessionCookie({
         sub,
         email,
         name,
         picture,
         provider,
-        role,
+        role: userRole,
+        userId: dbUser.id,
       })
-      console.log("✅ [AUTH CALLBACK] Session cookie created successfully")
-    } catch (cookieError) {
-      console.error("❌ [AUTH CALLBACK] Error creating session cookie:", cookieError)
-      throw cookieError
+
+      return NextResponse.json(
+        {
+          success: true,
+          user: {
+            sub,
+            email,
+            name,
+            picture,
+            role: userRole,
+            userId: dbUser.id,
+          },
+          redirect: redirectUrl,
+        },
+        { status: 200 }
+      )
     }
 
-    // 7. Determinar ruta de redirección según el rol
-    const redirectMap = {
-      Organizador: "/dashboard",
-      Proveedor: "/customer-dash",
-      Pagador: "/product/1234asdf",
-    }
+    // CASO: Usuario con múltiples roles - necesita seleccionar
+    console.log("👤 [AUTH CALLBACK] Multiple roles detected, redirecting to role selection")
+    
+    await setTemporarySessionCookie({
+      sub,
+      email,
+      name,
+      picture,
+      provider,
+      role: null,
+      needsRoleSelection: true,
+      availableRoles: userRoles,
+    })
 
-    // 8. Retornar respuesta exitosa con información del usuario
     return NextResponse.json(
       {
         success: true,
-        user: {
-          sub,
-          email,
-          name,
-          picture,
-          role,
-        },
-        redirect: redirectMap[role],
+        user: { sub, email, name, picture },
+        needsRoleSelection: true,
+        availableRoles: userRoles,
+        redirect: "/select-role",
       },
       { status: 200 }
     )
+
   } catch (error) {
     console.error("Auth callback error:", error)
+    
+    // Eliminar cualquier cookie de sesión en caso de error
+    await deleteSession()
 
     // Determinar tipo de error para respuesta apropiada
     const errorMessage = error instanceof Error ? error.message : "Authentication failed"
-    const statusCode = errorMessage.includes("Invalid") ? 401 : 500
+    
+    // Si es error de validación de token
+    if (errorMessage.includes("Invalid") || errorMessage.includes("expired")) {
+      const errorCode = ERROR_CODES.AUTH_VAL_001.code
+      console.error(formatErrorLog(errorCode, errorMessage))
+      return NextResponse.json(
+        {
+          error: true,
+          message: ERROR_CODES.AUTH_VAL_001.userMessage,
+          redirect: `/error?code=${errorCode}`,
+        },
+        { status: 401 }
+      )
+    }
 
+    // Error genérico
+    const errorCode = ERROR_CODES.ERR_GEN_000.code
+    console.error(formatErrorLog(errorCode, errorMessage))
     return NextResponse.json(
       {
-        error: "Authentication failed",
-        message: errorMessage,
+        error: true,
+        message: ERROR_CODES.ERR_GEN_000.userMessage,
+        redirect: `/error?code=${errorCode}`,
       },
-      { status: statusCode }
+      { status: 500 }
     )
   }
 }
@@ -133,4 +284,3 @@ export async function GET() {
     { status: 200 }
   )
 }
-

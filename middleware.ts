@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getSession, refreshSession, isSessionExpiringSoon, SESSION_COOKIE_NAME } from "@/lib/auth/session-manager"
+import { 
+  getSession, 
+  refreshSession, 
+  isSessionExpiringSoon, 
+  SESSION_COOKIE_NAME,
+  isTemporarySession,
+  isCompleteSession,
+  type AnySessionData,
+  type SessionRole,
+} from "@/lib/auth/session-manager"
 
 // Rutas que NO requieren autenticación (pero pueden redirigir si ya hay sesión)
 const PUBLIC_ROUTES = [
@@ -16,11 +25,58 @@ const PUBLIC_ROUTES = [
 // Rutas de API que requieren autenticación
 const PROTECTED_API_ROUTES = ["/api/protected"]
 
-// Rutas por rol
-const ROLE_ROUTES = {
-  Organizador: ["/dashboard"],
-  Proveedor: ["/customer-dash"],
-  Pagador: ["/product"],
+// Rutas para sesiones temporales
+const TEMPORARY_SESSION_ROUTES = {
+  onboarding: "/onboarding",
+  selectRole: "/select-role",
+}
+
+// Rutas de API para sesiones temporales
+const TEMPORARY_API_ROUTES = [
+  "/api/auth/set-role",
+  "/api/users/register",
+]
+
+// Rutas por rol (sesión completa)
+const ROLE_ROUTES: Record<SessionRole, string[]> = {
+  organizer: ["/dashboard"],
+  supplier: ["/customer-dash"],
+  buyer: ["/product"],
+}
+
+/**
+ * Obtiene la ruta por defecto para un rol
+ */
+function getDefaultRouteForRole(role: SessionRole): string {
+  const routes: Record<SessionRole, string> = {
+    organizer: "/dashboard",
+    supplier: "/customer-dash",
+    buyer: "/product/1234asdf",
+  }
+  return routes[role]
+}
+
+/**
+ * Verifica si un rol tiene acceso a una ruta específica
+ */
+function checkRoleAccess(role: SessionRole, pathname: string): boolean {
+  const allowedRoutes = ROLE_ROUTES[role]
+  return allowedRoutes.some((route) => pathname.startsWith(route))
+}
+
+/**
+ * Obtiene la ruta de redirección para una sesión temporal
+ */
+function getTemporarySessionRedirect(session: AnySessionData): string | null {
+  if (!isTemporarySession(session)) return null
+  
+  if (session.needsOnboarding) {
+    return TEMPORARY_SESSION_ROUTES.onboarding
+  }
+  if (session.needsRoleSelection) {
+    return TEMPORARY_SESSION_ROUTES.selectRole
+  }
+  return null
 }
 
 /**
@@ -51,18 +107,99 @@ export async function middleware(request: NextRequest) {
     // 4. CASO ESPECIAL: Página de login (/)
     if (pathname === "/") {
       if (session) {
-        // Usuario autenticado intentando acceder a login → redirigir a dashboard
-        console.log("🔄 [MIDDLEWARE] Usuario autenticado accediendo a /, redirigiendo a dashboard...")
-        const defaultRoute = getDefaultRouteForRole(session.role)
-        return NextResponse.redirect(new URL(defaultRoute, request.url))
-      } else {
-        // Usuario sin sesión → permitir acceso al login
-        console.log("✅ [MIDDLEWARE] Usuario sin sesión accediendo a /, permitiendo acceso a login")
-        return NextResponse.next()
+        // Usuario autenticado intentando acceder a login
+        if (isCompleteSession(session)) {
+          // Sesión completa → redirigir a dashboard
+          console.log("🔄 [MIDDLEWARE] Usuario con sesión completa accediendo a /, redirigiendo a dashboard...")
+          const defaultRoute = getDefaultRouteForRole(session.role)
+          return NextResponse.redirect(new URL(defaultRoute, request.url))
+        } else {
+          // Sesión temporal → redirigir a onboarding o select-role
+          const redirect = getTemporarySessionRedirect(session)
+          if (redirect) {
+            console.log(`🔄 [MIDDLEWARE] Usuario con sesión temporal accediendo a /, redirigiendo a ${redirect}...`)
+            return NextResponse.redirect(new URL(redirect, request.url))
+          }
+        }
       }
+      // Usuario sin sesión → permitir acceso al login
+      console.log("✅ [MIDDLEWARE] Usuario sin sesión accediendo a /, permitiendo acceso a login")
+      return NextResponse.next()
     }
 
-    // 5. Si no hay sesión válida, redirigir al login
+    // 5. Permitir acceso a rutas de API para sesiones temporales
+    if (TEMPORARY_API_ROUTES.some(route => pathname.startsWith(route))) {
+      if (session && isTemporarySession(session)) {
+        console.log(`✅ [MIDDLEWARE] Permitiendo acceso a API temporal: ${pathname}`)
+        return NextResponse.next()
+      }
+      // Si no hay sesión temporal, rechazar
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Temporary session required" },
+        { status: 401 }
+      )
+    }
+
+    // 6. Manejar rutas de sesión temporal (/onboarding, /select-role)
+    if (pathname === TEMPORARY_SESSION_ROUTES.onboarding) {
+      if (!session) {
+        // Sin sesión → redirigir a login
+        console.log("🔐 [MIDDLEWARE] Sin sesión en /onboarding, redirigiendo a login")
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+      
+      if (isCompleteSession(session)) {
+        // Sesión completa → redirigir a dashboard
+        console.log("🔄 [MIDDLEWARE] Sesión completa en /onboarding, redirigiendo a dashboard")
+        return NextResponse.redirect(new URL(getDefaultRouteForRole(session.role), request.url))
+      }
+      
+      if (!session.needsOnboarding) {
+        // No necesita onboarding → redirigir según estado
+        const redirect = getTemporarySessionRedirect(session)
+        if (redirect && redirect !== pathname) {
+          console.log(`🔄 [MIDDLEWARE] No necesita onboarding, redirigiendo a ${redirect}`)
+          return NextResponse.redirect(new URL(redirect, request.url))
+        }
+        // Si no hay redirect válido, ir a login
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+      
+      // Permitir acceso a onboarding
+      console.log("✅ [MIDDLEWARE] Permitiendo acceso a /onboarding")
+      return NextResponse.next()
+    }
+
+    if (pathname === TEMPORARY_SESSION_ROUTES.selectRole) {
+      if (!session) {
+        // Sin sesión → redirigir a login
+        console.log("🔐 [MIDDLEWARE] Sin sesión en /select-role, redirigiendo a login")
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+      
+      if (isCompleteSession(session)) {
+        // Sesión completa → redirigir a dashboard
+        console.log("🔄 [MIDDLEWARE] Sesión completa en /select-role, redirigiendo a dashboard")
+        return NextResponse.redirect(new URL(getDefaultRouteForRole(session.role), request.url))
+      }
+      
+      if (!session.needsRoleSelection) {
+        // No necesita selección de rol → redirigir según estado
+        const redirect = getTemporarySessionRedirect(session)
+        if (redirect && redirect !== pathname) {
+          console.log(`🔄 [MIDDLEWARE] No necesita role selection, redirigiendo a ${redirect}`)
+          return NextResponse.redirect(new URL(redirect, request.url))
+        }
+        // Si no hay redirect válido, ir a login
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+      
+      // Permitir acceso a select-role
+      console.log("✅ [MIDDLEWARE] Permitiendo acceso a /select-role")
+      return NextResponse.next()
+    }
+
+    // 7. Si no hay sesión válida, redirigir al login
     if (!session) {
       // Para API routes, retornar 401
       if (pathname.startsWith("/api/")) {
@@ -79,7 +216,18 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl)
     }
 
-    // 6. Verificar autorización basada en roles
+    // 8. Si es sesión temporal intentando acceder a rutas protegidas
+    if (isTemporarySession(session)) {
+      const redirect = getTemporarySessionRedirect(session)
+      if (redirect) {
+        console.log(`🔄 [MIDDLEWARE] Sesión temporal accediendo a ${pathname}, redirigiendo a ${redirect}`)
+        return NextResponse.redirect(new URL(redirect, request.url))
+      }
+      // Si no hay redirect válido, ir a login
+      return NextResponse.redirect(new URL("/", request.url))
+    }
+
+    // 9. Verificar autorización basada en roles (solo para sesiones completas)
     const hasAccess = checkRoleAccess(session.role, pathname)
     if (!hasAccess) {
       console.log(`⚠️ [MIDDLEWARE] Usuario ${session.role} sin acceso a ${pathname}, redirigiendo...`)
@@ -88,7 +236,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL(defaultRoute, request.url))
     }
 
-    // 7. Crear respuesta y agregar headers con info del usuario
+    // 10. Crear respuesta y agregar headers con info del usuario
     const response = NextResponse.next()
 
     // Agregar información del usuario en headers personalizados
@@ -97,8 +245,11 @@ export async function middleware(request: NextRequest) {
     response.headers.set("X-User-Email", session.email)
     response.headers.set("X-User-Role", session.role)
     response.headers.set("X-User-Provider", session.provider)
+    if (session.userId) {
+      response.headers.set("X-User-Id", session.userId)
+    }
 
-    // 8. Refrescar sesión si está próxima a expirar
+    // 11. Refrescar sesión si está próxima a expirar
     if (isSessionExpiringSoon(session)) {
       await refreshSession()
     }
@@ -112,29 +263,6 @@ export async function middleware(request: NextRequest) {
     response.cookies.delete(SESSION_COOKIE_NAME)
     return response
   }
-}
-
-/**
- * Verifica si un rol tiene acceso a una ruta específica
- */
-function checkRoleAccess(
-  role: "Organizador" | "Proveedor" | "Pagador",
-  pathname: string
-): boolean {
-  const allowedRoutes = ROLE_ROUTES[role]
-  return allowedRoutes.some((route) => pathname.startsWith(route))
-}
-
-/**
- * Obtiene la ruta por defecto para un rol
- */
-function getDefaultRouteForRole(role: "Organizador" | "Proveedor" | "Pagador"): string {
-  const routes = {
-    Organizador: "/dashboard",
-    Proveedor: "/customer-dash",
-    Pagador: "/product/1234asdf",
-  }
-  return routes[role]
 }
 
 /**
@@ -153,4 +281,3 @@ export const config = {
     "/((?!_next/static|_next/image|favicon.ico|.*\\..*|public).*)",
   ],
 }
-

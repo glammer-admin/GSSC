@@ -19,22 +19,16 @@ export async function GET(request: NextRequest) {
     hasError: !!error
   })
 
-  // Si hay error, mostrar página de error
+  // Si hay error, redirigir a página de error
   if (error) {
-    console.error("❌ [GOOGLE CALLBACK] Auth error:", error, errorDescription)
-    return new NextResponse(getErrorPage(errorDescription || error), {
-      headers: { "Content-Type": "text/html" },
-      status: 400,
-    })
+    console.error("[AUTH-SSO-001] OAuth error:", error, errorDescription)
+    return NextResponse.redirect(new URL("/error?code=AUTH-SSO-001", request.url))
   }
 
-  // Si no hay código, error
+  // Si no hay código, redirigir a página de error
   if (!code) {
-    console.error("❌ [GOOGLE CALLBACK] No code received")
-    return new NextResponse(getErrorPage("No se recibió código de autorización"), {
-      headers: { "Content-Type": "text/html" },
-      status: 400,
-    })
+    console.error("[AUTH-SSO-002] No authorization code received")
+    return NextResponse.redirect(new URL("/error?code=AUTH-SSO-002", request.url))
   }
 
   // Retornar página HTML que procesa el código usando sessionStorage
@@ -132,7 +126,9 @@ function getProcessingPage(code: string, state: string): string {
         });
 
         if (!codeVerifier) {
-          throw new Error('No se encontró el código de verificación. Por favor, intenta nuevamente.');
+          console.error('[AUTH-SSO-003] No code_verifier found in sessionStorage');
+          window.location.href = '/error?code=AUTH-SSO-003';
+          return;
         }
 
         if (savedState !== state) {
@@ -154,7 +150,13 @@ function getProcessingPage(code: string, state: string): string {
 
         if (!tokenResponse.ok) {
           const error = await tokenResponse.json();
-          throw new Error(error.details || error.error || 'Error intercambiando código');
+          console.error('[AUTH-TKN-001] Token exchange failed:', error);
+          sessionStorage.removeItem('pkce_code_verifier');
+          sessionStorage.removeItem('pkce_state');
+          sessionStorage.removeItem('pkce_provider');
+          const errorCode = error.errorCode || 'AUTH-TKN-001';
+          window.location.href = '/error?code=' + errorCode;
+          return;
         }
 
         const tokenData = await tokenResponse.json();
@@ -173,12 +175,22 @@ function getProcessingPage(code: string, state: string): string {
           }),
         });
 
-        if (!authResponse.ok) {
-          const error = await authResponse.json();
-          throw new Error(error.message || 'Error creando sesión');
+        const authData = await authResponse.json();
+        
+        // Verificar si hay error con redirección a página de error
+        if (authData.error && authData.redirect) {
+          console.error('❌ [GOOGLE CALLBACK] Auth error, redirecting to error page');
+          sessionStorage.removeItem('pkce_code_verifier');
+          sessionStorage.removeItem('pkce_state');
+          sessionStorage.removeItem('pkce_provider');
+          window.location.href = authData.redirect;
+          return;
         }
 
-        const authData = await authResponse.json();
+        if (!authResponse.ok) {
+          throw new Error(authData.message || 'Error creando sesión');
+        }
+
         console.log('✅ [GOOGLE CALLBACK] Session created, redirecting...');
 
         // 4. Limpiar sessionStorage
@@ -194,17 +206,15 @@ function getProcessingPage(code: string, state: string): string {
         }, 500);
 
       } catch (error) {
-        console.error('❌ [GOOGLE CALLBACK] Error:', error);
-        statusEl.textContent = 'Error en la autenticación';
-        errorContainer.innerHTML = \`
-          <div class="error">
-            <strong>Error:</strong> \${error.message || 'Error desconocido'}
-            <br><br>
-            <a href="/" style="color: #4285f4; text-decoration: none; font-weight: 500;">
-              ← Volver al login
-            </a>
-          </div>
-        \`;
+        console.error('[ERR-GEN-000] Unexpected error:', error);
+        
+        // Limpiar sessionStorage en caso de error
+        sessionStorage.removeItem('pkce_code_verifier');
+        sessionStorage.removeItem('pkce_state');
+        sessionStorage.removeItem('pkce_provider');
+        
+        // Redirigir a página de error
+        window.location.href = '/error?code=ERR-GEN-000';
       }
     })();
   </script>
@@ -213,77 +223,4 @@ function getProcessingPage(code: string, state: string): string {
   `
 }
 
-function getErrorPage(errorMessage: string): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Error - Google Sign In</title>
-  <meta charset="utf-8">
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
-      background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
-    }
-    .card {
-      background: white;
-      padding: 3rem;
-      border-radius: 12px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-      text-align: center;
-      max-width: 400px;
-    }
-    .error-icon {
-      width: 60px;
-      height: 60px;
-      margin: 0 auto 1.5rem;
-      background: #ffebee;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #d32f2f;
-      font-size: 2rem;
-    }
-    h1 {
-      color: #333;
-      margin: 0 0 0.5rem;
-      font-size: 1.5rem;
-    }
-    p {
-      color: #666;
-      margin: 1rem 0;
-      line-height: 1.5;
-    }
-    a {
-      display: inline-block;
-      background: #4285f4;
-      color: white;
-      padding: 0.75rem 2rem;
-      border-radius: 8px;
-      text-decoration: none;
-      margin-top: 1rem;
-      transition: background 0.2s;
-    }
-    a:hover {
-      background: #357ae8;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="error-icon">✕</div>
-    <h1>Error de Autenticación</h1>
-    <p>${errorMessage}</p>
-    <a href="/">Volver al login</a>
-  </div>
-</body>
-</html>
-  `
-}
 

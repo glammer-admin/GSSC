@@ -11,15 +11,56 @@ const SESSION_DURATION = 24 * 60 * 60 // 24 horas en segundos
 // Duración del refresh token (7 días)
 const REFRESH_DURATION = 7 * 24 * 60 * 60 // 7 días en segundos
 
+// Tipos de rol de sesión (en inglés, igual que la BD)
+export type SessionRole = "buyer" | "organizer" | "supplier"
+
+// Datos de sesión completa (usuario validado con rol)
 export interface SessionData {
   sub: string // ID del usuario (subject)
   email: string
   name?: string
   picture?: string
   provider: "google" | "microsoft" | "meta"
-  role: "Organizador" | "Proveedor" | "Pagador"
+  role: SessionRole
+  userId?: string // UUID de glam_users (solo si está registrado)
   iat: number // Issued at
   exp: number // Expiration
+}
+
+// Datos de sesión temporal (antes de validar BD)
+export interface TemporarySessionData {
+  sub: string
+  email: string
+  name?: string
+  picture?: string
+  provider: "google" | "microsoft" | "meta"
+  role: null // Sin rol asignado aún
+  needsOnboarding?: boolean // Usuario nuevo, necesita registro
+  needsRoleSelection?: boolean // Usuario con múltiples roles
+  availableRoles?: string[] // Roles disponibles para selección
+  iat: number
+  exp: number
+}
+
+// Unión de ambos tipos de sesión
+export type AnySessionData = SessionData | TemporarySessionData
+
+/**
+ * Verifica si una sesión es temporal
+ */
+export function isTemporarySession(session: AnySessionData): session is TemporarySessionData {
+  return session.role === null || 
+         ('needsOnboarding' in session && session.needsOnboarding === true) ||
+         ('needsRoleSelection' in session && session.needsRoleSelection === true)
+}
+
+/**
+ * Verifica si una sesión está completa
+ */
+export function isCompleteSession(session: AnySessionData): session is SessionData {
+  return session.role !== null && 
+         !('needsOnboarding' in session && session.needsOnboarding) &&
+         !('needsRoleSelection' in session && session.needsRoleSelection)
 }
 
 /**
@@ -65,9 +106,30 @@ export async function createSessionToken(data: Omit<SessionData, "iat" | "exp">)
 }
 
 /**
+ * Crea un token de sesión temporal JWT firmado
+ */
+export async function createTemporarySessionToken(
+  data: Omit<TemporarySessionData, "iat" | "exp">
+): Promise<string> {
+  const secret = getSecretKey()
+  const iat = Math.floor(Date.now() / 1000)
+  const exp = iat + SESSION_DURATION
+
+  const token = await new SignJWT({ ...data, iat, exp })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setIssuedAt(iat)
+    .setExpirationTime(exp)
+    .setIssuer("gssc-platform")
+    .setAudience("gssc-users")
+    .sign(secret)
+
+  return token
+}
+
+/**
  * Verifica y decodifica un token de sesión
  */
-export async function verifySessionToken(token: string): Promise<SessionData> {
+export async function verifySessionToken(token: string): Promise<AnySessionData> {
   try {
     const secret = getSecretKey()
     const { payload } = await jwtVerify(token, secret, {
@@ -75,7 +137,7 @@ export async function verifySessionToken(token: string): Promise<SessionData> {
       audience: "gssc-users",
     })
 
-    return payload as unknown as SessionData
+    return payload as unknown as AnySessionData
   } catch (error) {
     console.error("Session token verification error:", error)
     throw new Error("Invalid session token")
@@ -120,9 +182,57 @@ export async function setSessionCookie(sessionData: Omit<SessionData, "iat" | "e
 }
 
 /**
+ * Crea una cookie de sesión temporal
+ */
+export async function setTemporarySessionCookie(
+  sessionData: Omit<TemporarySessionData, "iat" | "exp">
+): Promise<void> {
+  console.log("🍪 [SESSION] Creating TEMPORARY session token for:", sessionData.email)
+  
+  const token = await createTemporarySessionToken(sessionData)
+  console.log("🍪 [SESSION] Temporary token created, length:", token.length)
+  
+  const cookieStore = await cookies()
+  const config = getConfig()
+
+  cookieStore.set(SESSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: config.secureCookies,
+    sameSite: "lax",
+    maxAge: config.sessionDuration,
+    path: "/",
+  })
+  
+  console.log("✅ [SESSION] Temporary cookie set successfully")
+}
+
+/**
+ * Actualiza la sesión con el rol seleccionado
+ */
+export async function updateSessionWithRole(
+  currentSession: AnySessionData,
+  role: SessionRole,
+  userId?: string
+): Promise<void> {
+  console.log("🔄 [SESSION] Updating session with role:", role)
+  
+  await setSessionCookie({
+    sub: currentSession.sub,
+    email: currentSession.email,
+    name: currentSession.name,
+    picture: currentSession.picture,
+    provider: currentSession.provider,
+    role,
+    userId,
+  })
+  
+  console.log("✅ [SESSION] Session updated with role:", role)
+}
+
+/**
  * Obtiene la sesión actual desde la cookie
  */
-export async function getSession(): Promise<SessionData | null> {
+export async function getSession(): Promise<AnySessionData | null> {
   try {
     const cookieStore = await cookies()
     const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)
@@ -146,6 +256,18 @@ export async function getSession(): Promise<SessionData | null> {
     await deleteSession()
     return null
   }
+}
+
+/**
+ * Obtiene la sesión completa (no temporal)
+ * Retorna null si la sesión es temporal
+ */
+export async function getCompleteSession(): Promise<SessionData | null> {
+  const session = await getSession()
+  if (!session || !isCompleteSession(session)) {
+    return null
+  }
+  return session
 }
 
 /**
@@ -181,15 +303,31 @@ export async function refreshSession(): Promise<boolean> {
       return false
     }
 
-    // Crear nueva sesión con tiempo extendido
-    await setSessionCookie({
-      sub: session.sub,
-      email: session.email,
-      name: session.name,
-      picture: session.picture,
-      provider: session.provider,
-      role: session.role,
-    })
+    // Si es sesión completa, refrescarla
+    if (isCompleteSession(session)) {
+      await setSessionCookie({
+        sub: session.sub,
+        email: session.email,
+        name: session.name,
+        picture: session.picture,
+        provider: session.provider,
+        role: session.role,
+        userId: session.userId,
+      })
+    } else {
+      // Si es temporal, refrescar como temporal
+      await setTemporarySessionCookie({
+        sub: session.sub,
+        email: session.email,
+        name: session.name,
+        picture: session.picture,
+        provider: session.provider,
+        role: null,
+        needsOnboarding: session.needsOnboarding,
+        needsRoleSelection: session.needsRoleSelection,
+        availableRoles: session.availableRoles,
+      })
+    }
 
     return true
   } catch (error) {
@@ -201,9 +339,8 @@ export async function refreshSession(): Promise<boolean> {
 /**
  * Verifica si una sesión está próxima a expirar (menos de 1 hora)
  */
-export function isSessionExpiringSoon(session: SessionData): boolean {
+export function isSessionExpiringSoon(session: AnySessionData): boolean {
   const now = Math.floor(Date.now() / 1000)
   const oneHour = 60 * 60
   return session.exp - now < oneHour
 }
-

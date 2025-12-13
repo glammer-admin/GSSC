@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { getDefaultRouteByRole } from "@/lib/menu-config"
 import { generateMockToken } from "@/lib/auth/mock-sso"
@@ -10,12 +10,23 @@ import { signInWithMicrosoft } from "@/lib/auth/microsoft-oauth"
 
 export function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
   const [useRealSSO, setUseRealSSO] = useState(false)
   const [googleClientId, setGoogleClientId] = useState<string>("")
   const [microsoftClientId, setMicrosoftClientId] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  // Verificar si viene de cancelación de registro
+  useEffect(() => {
+    if (searchParams.get("cancelled") === "true") {
+      setSuccessMessage("Registro cancelado")
+      // Limpiar el query param de la URL sin recargar
+      router.replace("/", { scroll: false })
+    }
+  }, [searchParams, router])
 
   // Verificar si hay credenciales configuradas
   useEffect(() => {
@@ -95,6 +106,14 @@ export function LoginForm() {
         router.push(data.redirect)
       } else {
         console.error("Login failed:", data)
+        
+        // Si hay una URL de redirección de error, redirigir a ella
+        if (data.redirect) {
+          router.push(data.redirect)
+          return
+        }
+        
+        // Fallback: mostrar error en el formulario
         setError(data.message || "Error al procesar la autenticación. Por favor, intenta nuevamente.")
         setLoading(false)
         setSelectedProvider(null)
@@ -193,6 +212,39 @@ export function LoginForm() {
               </button>
             ))}
           </div>
+
+          {/* Success Message (e.g., registration cancelled) */}
+          {successMessage && (
+            <div className="p-4 bg-muted border-2 border-border rounded-lg animate-in fade-in slide-in-from-top-2 duration-300 mb-4">
+              <div className="flex items-start gap-3">
+                <svg 
+                  className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
+                  />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-foreground font-medium text-sm">{successMessage}</p>
+                </div>
+                <button
+                  onClick={() => setSuccessMessage(null)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Cerrar mensaje"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (
