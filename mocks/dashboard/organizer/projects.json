@@ -1,0 +1,77 @@
+{
+  "projects": [
+    {
+      "id": "proj-001",
+      "name": "Campaña Navidad 2024",
+      "status": "active",
+      "metrics": {
+        "orders": 150,
+        "completedOrders": 120,
+        "inProgressOrders": 30,
+        "unitsSold": 450,
+        "commission": 15000.00
+      }
+    },
+    {
+      "id": "proj-002",
+      "name": "Festival de Verano",
+      "status": "active",
+      "metrics": {
+        "orders": 230,
+        "completedOrders": 200,
+        "inProgressOrders": 30,
+        "unitsSold": 680,
+        "commission": 22500.00
+      }
+    },
+    {
+      "id": "proj-003",
+      "name": "Black Friday 2024",
+      "status": "finished",
+      "metrics": {
+        "orders": 520,
+        "completedOrders": 520,
+        "inProgressOrders": 0,
+        "unitsSold": 1560,
+        "commission": 48000.00
+      }
+    },
+    {
+      "id": "proj-004",
+      "name": "Colección Primavera",
+      "status": "paused",
+      "metrics": {
+        "orders": 85,
+        "completedOrders": 75,
+        "inProgressOrders": 10,
+        "unitsSold": 210,
+        "commission": 8500.00
+      }
+    },
+    {
+      "id": "proj-005",
+      "name": "Día de la Madre 2024",
+      "status": "finished",
+      "metrics": {
+        "orders": 180,
+        "completedOrders": 180,
+        "inProgressOrders": 0,
+        "unitsSold": 420,
+        "commission": 18000.00
+      }
+    },
+    {
+      "id": "proj-006",
+      "name": "Cyber Monday 2024",
+      "status": "active",
+      "metrics": {
+        "orders": 310,
+        "completedOrders": 280,
+        "inProgressOrders": 30,
+        "unitsSold": 890,
+        "commission": 35000.00
+      }
+    }
+  ]
+}
+

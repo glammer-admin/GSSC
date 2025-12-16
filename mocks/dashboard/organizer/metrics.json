@@ -1,0 +1,24 @@
+{
+  "monthly": {
+    "commission": 45000.00,
+    "totalOrders": 500,
+    "completedOrders": 420,
+    "inProgressOrders": 80,
+    "productsSold": 1500
+  },
+  "quarterly": {
+    "commission": 125000.00,
+    "totalOrders": 1350,
+    "completedOrders": 1180,
+    "inProgressOrders": 170,
+    "productsSold": 4100
+  },
+  "biannual": {
+    "commission": 235000.00,
+    "totalOrders": 2650,
+    "completedOrders": 2400,
+    "inProgressOrders": 250,
+    "productsSold": 7800
+  }
+}
+

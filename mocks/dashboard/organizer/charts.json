@@ -1,0 +1,35 @@
+{
+  "commissionEvolution": {
+    "monthly": [
+      { "period": "Sem 1", "value": 8500 },
+      { "period": "Sem 2", "value": 11200 },
+      { "period": "Sem 3", "value": 12800 },
+      { "period": "Sem 4", "value": 12500 }
+    ],
+    "quarterly": [
+      { "period": "Oct", "value": 38000 },
+      { "period": "Nov", "value": 42000 },
+      { "period": "Dic", "value": 45000 }
+    ],
+    "biannual": [
+      { "period": "Jul", "value": 32000 },
+      { "period": "Ago", "value": 35000 },
+      { "period": "Sep", "value": 38000 },
+      { "period": "Oct", "value": 40000 },
+      { "period": "Nov", "value": 45000 },
+      { "period": "Dic", "value": 45000 }
+    ]
+  },
+  "ordersStatus": {
+    "completed": 420,
+    "inProgress": 80
+  },
+  "topProducts": [
+    { "name": "Camiseta Premium", "unitsSold": 320 },
+    { "name": "Pantalón Casual", "unitsSold": 280 },
+    { "name": "Vestido Elegante", "unitsSold": 245 },
+    { "name": "Chaqueta Sport", "unitsSold": 198 },
+    { "name": "Zapatos Formales", "unitsSold": 175 }
+  ]
+}
+
