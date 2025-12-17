@@ -56,7 +56,7 @@
           "id": "configuracion",
           "icon": "Settings",
           "label": "Configuración",
-          "href": "/dashboard/settings"
+          "href": "/settings/billing"
         }
       ]
     },
