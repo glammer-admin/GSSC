@@ -80,7 +80,7 @@ export const menuConfig: MenuConfig = {
       id: "configuracion",
       icon: Settings,
       label: "Configuración",
-      href: "/dashboard/settings",
+      href: "/settings/billing",
       roles: ["organizer"],
     },
   ],
