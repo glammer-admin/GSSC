@@ -201,6 +201,7 @@ Antes de aprobar este spec:
 - [ ] Las reglas de negocio están numeradas
 - [ ] No hay ambigüedades
 - [ ] El alcance está claro
+- [ ] No hay ejmplos de codigo fuente
 
 ---
 

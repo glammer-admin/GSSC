@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     if (!clientId || !clientSecret) {
       console.error("[AUTH-CFG-002] Missing OAuth credentials in .env")
       return NextResponse.json(
-        { error: "Server configuration error", errorCode: "AUTH-CFG-002" },
+        { error: "Server configuration error", errorCode: "AUTH-CFG-002" }, 
         { status: 500 }
       )
     }
