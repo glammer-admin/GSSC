@@ -15,7 +15,7 @@ interface CreateProjectButtonProps {
 export function CreateProjectButton({ className }: CreateProjectButtonProps) {
   return (
     <Button asChild className={className}>
-      <Link href="/dashboard/project/new">
+      <Link href="/project/new">
         <Plus className="mr-2 h-4 w-4" />
         Crear nuevo proyecto
       </Link>
