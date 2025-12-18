@@ -5,10 +5,15 @@
 1. [Introducción](#introducción)
 2. [Conceptos Básicos](#conceptos-básicos)
 3. [Inicio de Sesión](#inicio-de-sesión)
-4. [Roles y Permisos](#roles-y-permisos)
-5. [Navegación](#navegación)
-6. [Cerrar Sesión](#cerrar-sesión)
-7. [Preguntas Frecuentes](#preguntas-frecuentes)
+4. [Registro de Usuarios](#registro-de-usuarios)
+5. [Selección de Rol](#selección-de-rol)
+6. [Roles y Permisos](#roles-y-permisos)
+7. [Dashboard del Organizador](#dashboard-del-organizador)
+8. [Configuración de Facturación y Pagos](#configuración-de-facturación-y-pagos)
+9. [Sistema de Errores](#sistema-de-errores)
+10. [Navegación](#navegación)
+11. [Cerrar Sesión](#cerrar-sesión)
+12. [Preguntas Frecuentes](#preguntas-frecuentes)
 
 ---
 
@@ -16,9 +21,9 @@
 
 GSSC (Glamur Supply Chain Control) es una plataforma de gestión colaborativa que conecta tres tipos de usuarios diferentes:
 
-- **Organizadores**: Gestionan proyectos y coordinan el trabajo
+- **Organizadores**: Gestionan proyectos, coordinan el trabajo y reciben comisiones por las ventas
 - **Proveedores**: Ejecutan servicios y gestionan clientes
-- **Pagadores**: Realizan seguimiento de transacciones y pagos
+- **Compradores**: Realizan compras y seguimiento de sus pedidos
 
 Cada rol accede a la plataforma con un proveedor de autenticación diferente para mantener la seguridad y separación de responsabilidades.
 
@@ -28,106 +33,180 @@ Cada rol accede a la plataforma con un proveedor de autenticación diferente par
 
 ### ¿Qué es Single Sign-On (SSO)?
 
-SSO permite iniciar sesión usando tu cuenta existente de Google, Microsoft o Meta, sin necesidad de crear una nueva contraseña. Es más seguro y conveniente.
+SSO permite iniciar sesión usando tu cuenta existente de Google o Microsoft, sin necesidad de crear una nueva contraseña. Es más seguro y conveniente.
 
-### Roles y Proveedores
+### Roles del Sistema
 
-| Rol | Proveedor de Autenticación | Dashboard |
-|-----|---------------------------|-----------|
-| **Organizador** | Google | `/dashboard` |
-| **Proveedor** | Microsoft | `/customer-dash` |
-| **Pagador** | Meta/Facebook | `/product/{id}` |
+| Rol | Descripción | Dashboard Principal |
+|-----|-------------|---------------------|
+| **Organizador** | Gestiona proyectos y recibe comisiones por ventas | `/dashboard` |
+| **Proveedor** | Ejecuta servicios y gestiona clientes | `/customer-dash` |
+| **Comprador** | Realiza compras y consulta historial | `/product/{id}` |
 
-Esta asignación automática garantiza que cada tipo de usuario use el sistema de autenticación de su organización.
+### Glosario de Términos
+
+| Término | Definición |
+|---------|------------|
+| **Comisión del organizador** | Porcentaje de ganancia que recibe el organizador por las ventas de sus proyectos |
+| **Proyecto** | Unidad de negocio que agrupa pedidos, productos y genera comisiones |
+| **Persona Natural** | Individuo que actúa a título personal, identificado con cédula |
+| **Persona Jurídica** | Empresa legalmente constituida, identificada con NIT y RUT |
+| **Verificación de cuenta** | Proceso de validación de que la cuenta bancaria pertenece al usuario |
+| **Onboarding** | Proceso de registro inicial para nuevos usuarios |
 
 ---
 
 ## Inicio de Sesión
 
-### Paso 1: Acceder a la Plataforma
-
-1. Abre tu navegador web
-2. Navega a la URL de la plataforma
-3. Verás la pantalla de login con tres opciones de inicio de sesión
-
-### Paso 2: Seleccionar tu Método de Autenticación
-
-Dependiendo de tu rol en la organización:
-
-#### **Si eres Organizador:**
-1. Click en **"Continuar con Google"**
-2. Selecciona tu cuenta de Google
-3. Autoriza el acceso a la plataforma
-4. Serás redirigido automáticamente al Dashboard
-
-#### **Si eres Proveedor:**
-1. Click en **"Continuar con Microsoft"**
-2. Ingresa con tu cuenta corporativa de Microsoft
-3. Autoriza el acceso a la plataforma
-4. Serás redirigido automáticamente al Panel de Proveedores
-
-#### **Si eres Pagador:**
-1. Click en **"Continuar con Meta"**
-2. Ingresa con tu cuenta de Facebook/Meta
-3. Autoriza el acceso a la plataforma
-4. Serás redirigido automáticamente al Historial de Productos
-
 ### Proceso de Autenticación
 
-**Lo que sucede detrás de escena:**
+El sistema utiliza autenticación federada (SSO) con Google y Microsoft. El flujo completo se describe a continuación:
 
-```
-1. Click en botón de SSO
-   ↓
-2. Redirigido a la página de login del proveedor
-   (Google/Microsoft/Meta)
-   ↓
-3. Ingresas tus credenciales
-   ↓
-4. Autorizas el acceso a la aplicación
-   ↓
-5. Procesamiento seguro de tu información
-   ↓
-6. Creación de sesión protegida
-   ↓
-7. Redirigido a tu dashboard personalizado
+```mermaid
+flowchart TD
+    A[Usuario accede a la plataforma] --> B{¿Tiene sesión activa?}
+    B -->|Sí| C[Redirige al Dashboard]
+    B -->|No| D[Muestra pantalla de Login]
+    D --> E[Usuario selecciona proveedor SSO]
+    E --> F[Redirige a Google/Microsoft]
+    F --> G[Usuario ingresa credenciales]
+    G --> H[Proveedor autoriza acceso]
+    H --> I[Sistema recibe token de autenticación]
+    I --> J{¿Usuario existe en BD?}
+    J -->|Sí, un rol| C
+    J -->|Sí, múltiples roles| K[Pantalla de Selección de Rol]
+    J -->|No| L[Formulario de Onboarding]
+    K --> M[Usuario selecciona rol]
+    M --> C
+    L --> N[Usuario completa registro]
+    N --> C
 ```
 
-**Tiempo estimado:** 5-10 segundos
+### Pasos para Iniciar Sesión
+
+1. Accede a la URL de la plataforma
+2. Selecciona tu método de autenticación (Google o Microsoft)
+3. Ingresa tus credenciales en la página del proveedor
+4. Autoriza el acceso a la plataforma
+5. El sistema te redirigirá automáticamente según tu situación:
+   - **Usuario existente con un rol**: Directo al dashboard
+   - **Usuario existente con múltiples roles**: Pantalla de selección de rol
+   - **Usuario nuevo**: Formulario de onboarding
 
 ### Pantalla de Procesamiento
 
-Después de autenticarte con tu proveedor, verás una pantalla de procesamiento con:
-- Spinner animado con los colores del proveedor
+Después de autenticarte, verás una pantalla de procesamiento con:
+- Indicador de progreso animado
 - Mensaje: "Completando autenticación"
 - Mensaje: "Procesando tu información..."
 - Mensaje: "¡Autenticación exitosa! Redirigiendo..."
 
-Esta pantalla aparece por 1-2 segundos mientras se crea tu sesión segura.
+---
+
+## Registro de Usuarios
+
+### Proceso de Onboarding
+
+Cuando un usuario nuevo inicia sesión por primera vez, el sistema lo redirige al formulario de onboarding para completar su registro.
+
+```mermaid
+flowchart TD
+    A[Usuario nuevo completa SSO] --> B[Sistema detecta usuario no registrado]
+    B --> C[Redirige a /onboarding]
+    C --> D[Muestra formulario pre-llenado con datos del SSO]
+    D --> E[Usuario completa información faltante]
+    E --> F{¿Datos válidos?}
+    F -->|No| G[Muestra errores de validación]
+    G --> E
+    F -->|Sí| H[Sistema crea usuario en BD]
+    H --> I{¿Seleccionó múltiples roles?}
+    I -->|Sí| J[Redirige a selección de rol]
+    I -->|No| K[Redirige al dashboard]
+```
+
+### Información Requerida en el Registro
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| Nombre completo | Sí | Mínimo 3 caracteres |
+| Teléfono celular | Sí | Formato internacional (+57...) |
+| Ciudad | Sí | Mínimo 2 caracteres |
+| Departamento/Estado | Sí | Mínimo 2 caracteres |
+| País | Sí | Por defecto: Colombia |
+| Dirección | Sí | Mínimo 10 caracteres |
+| Información adicional | No | Apartamento, edificio, etc. |
+| Rol | Sí | Comprador (por defecto) u Organizador |
+
+### Roles Disponibles en el Registro
+
+- **Comprador (buyer)**: Rol por defecto, permite realizar compras
+- **Organizador (organizer)**: Permite gestionar proyectos y recibir comisiones
+- El rol de **Proveedor (supplier)** solo se asigna internamente
+
+### Cancelación del Registro
+
+Si decides cancelar el proceso de registro:
+1. Haz clic en el botón "Cancelar"
+2. Confirma en el diálogo que aparece
+3. Tu sesión se cerrará y volverás a la página de inicio
+
+---
+
+## Selección de Rol
+
+### ¿Cuándo se muestra esta pantalla?
+
+La pantalla de selección de rol aparece cuando:
+- Un usuario existente tiene múltiples roles asignados
+- Un usuario nuevo se registra con más de un rol
+
+```mermaid
+flowchart TD
+    A[Usuario con múltiples roles] --> B[Pantalla de Selección de Rol]
+    B --> C[Muestra roles disponibles]
+    C --> D[Usuario selecciona un rol]
+    D --> E[Sistema actualiza sesión con rol seleccionado]
+    E --> F[Redirige al dashboard correspondiente]
+```
+
+### Proceso de Selección
+
+1. Se muestran todos los roles disponibles para tu cuenta
+2. Selecciona el rol con el que deseas trabajar
+3. Haz clic en "Continuar"
+4. Serás redirigido al dashboard correspondiente al rol seleccionado
+
+**Nota:** Si necesitas cambiar de rol, deberás cerrar sesión e iniciar nuevamente.
 
 ---
 
 ## Roles y Permisos
 
-### Organizador (Google)
+### Organizador
 
 **Dashboard Principal:** `/dashboard`
+
+**Funcionalidades:**
+- Vista ejecutiva de todos sus proyectos
+- Métricas de comisiones generadas
+- Gestión de proyectos
+- Configuración de facturación y pagos
+- Creación de nuevos proyectos
 
 **Menú de Navegación:**
 - 🏠 **Dashboard**: Vista general de proyectos y métricas
 - 📁 **Proyectos**: Gestión de proyectos activos
 - 💳 **Pagos**: Control de transacciones y facturación
-- ⚙️ **Configuración**: Ajustes de cuenta y preferencias
+- ⚙️ **Configuración**: Ajustes de cuenta, facturación y pagos
 
-**Permisos:**
-- ✅ Ver todos los proyectos
-- ✅ Gestionar pagos
-- ✅ Configurar la plataforma
-- ❌ No tiene acceso a secciones de Proveedor o Pagador
-
-### Proveedor (Microsoft)
+### Proveedor
 
 **Dashboard Principal:** `/customer-dash`
+
+**Funcionalidades:**
+- Gestión de clientes asignados
+- Seguimiento de proyectos
+- Calendario de actividades
 
 **Menú de Navegación:**
 - 🏠 **Dashboard**: Vista general de clientes y servicios
@@ -135,23 +214,262 @@ Esta pantalla aparece por 1-2 segundos mientras se crea tu sesión segura.
 - 👥 **Clientes**: Gestión de cartera de clientes
 - 📅 **Calendario**: Agenda y planificación
 
-**Permisos:**
-- ✅ Ver proyectos asignados
-- ✅ Gestionar clientes
-- ✅ Actualizar calendario
-- ❌ No tiene acceso a secciones de Organizador o Pagador
-
-### Pagador (Meta)
+### Comprador
 
 **Dashboard Principal:** `/product/{id}`
 
-**Menú de Navegación:**
-- 📜 **Historial**: Registro de transacciones y pagos
+**Funcionalidades:**
+- Consulta de productos
+- Historial de compras
+- Seguimiento de pedidos
 
-**Permisos:**
-- ✅ Ver historial de productos
-- ✅ Consultar transacciones
-- ❌ No tiene acceso a secciones de Organizador o Proveedor
+**Menú de Navegación:**
+- 📜 **Historial**: Registro de transacciones y compras
+
+---
+
+## Dashboard del Organizador
+
+### Propósito
+
+El Dashboard del Organizador es la pantalla principal para usuarios con rol organizador. Proporciona una **vista ejecutiva y consolidada** del desempeño de todos los proyectos, permitiendo tomar decisiones estratégicas basadas en métricas agregadas.
+
+### Estructura del Dashboard
+
+```mermaid
+flowchart TB
+    subgraph Dashboard["Dashboard del Organizador"]
+        A[Selector de Periodo] --> B[KPIs Ejecutivos]
+        B --> C[Gráficas de Tendencias]
+        C --> D[Resumen de Proyectos]
+        D --> E[Buscador de Proyectos]
+        E --> F[Botón Crear Proyecto]
+    end
+```
+
+### KPIs Ejecutivos
+
+El dashboard muestra las siguientes métricas clave:
+
+| KPI | Descripción |
+|-----|-------------|
+| **Comisión generada** | Valor monetario de la comisión del organizador (nunca ventas brutas) |
+| **Pedidos totales** | Cantidad total de pedidos en todos los proyectos |
+| **Pedidos completados** | Pedidos entregados exitosamente |
+| **Pedidos en proceso** | Pedidos aún no completados |
+| **Productos vendidos** | Total de unidades vendidas |
+
+**Importante:** Los valores monetarios mostrados corresponden **exclusivamente** a la comisión del organizador, nunca a ventas brutas o ingresos totales.
+
+### Filtros Temporales
+
+Puedes analizar las métricas por diferentes periodos:
+
+| Periodo | Descripción |
+|---------|-------------|
+| **Mensual** | Datos del mes actual (selección por defecto) |
+| **Trimestral** | Datos de los últimos 3 meses |
+| **Semestral** | Datos de los últimos 6 meses |
+
+**Nota:** No se permite análisis diario u operacional desde este dashboard.
+
+### Gráficas de Tendencias
+
+El dashboard incluye tres visualizaciones principales:
+
+1. **Evolución de Comisión**
+   - Muestra la comisión generada a lo largo del tiempo
+   - Agrupación según el periodo seleccionado
+
+2. **Estado de Pedidos**
+   - Distribución de pedidos por estado
+   - Completados vs En proceso
+
+3. **Productos Más Vendidos**
+   - Ranking de productos por unidades vendidas
+   - Sin valores monetarios
+
+**Nota:** Las gráficas son informativas y no interactivas (no permiten drill-down).
+
+### Resumen de Proyectos
+
+Para cada proyecto se muestra:
+- Nombre del proyecto
+- Estado (activo, pausado, finalizado)
+- Cantidad de pedidos
+- Unidades vendidas
+- Comisión generada
+
+### Búsqueda de Proyectos
+
+El buscador permite filtrar proyectos por:
+- **Nombre** del proyecto
+- **Estado** (activo, pausado, finalizado)
+
+**Limitaciones:** No permite buscar productos, pedidos ni compradores.
+
+### Creación de Proyectos
+
+El botón "Crear nuevo proyecto" es la única acción primaria disponible en el dashboard. Al hacer clic, se inicia el flujo de creación de un nuevo proyecto.
+
+### Estados de Proyectos
+
+```mermaid
+stateDiagram-v2
+    [*] --> Activo: Crear proyecto
+    Activo --> Pausado: Pausar
+    Activo --> Finalizado: Finalizar
+    Pausado --> Activo: Reactivar
+    Pausado --> Finalizado: Finalizar
+    Finalizado --> [*]
+```
+
+| Estado | Descripción |
+|--------|-------------|
+| **Activo** | Proyecto operando normalmente, genera pedidos y comisiones |
+| **Pausado** | Proyecto temporalmente detenido, no genera nuevos pedidos |
+| **Finalizado** | Proyecto cerrado definitivamente, solo consulta histórica |
+
+---
+
+## Configuración de Facturación y Pagos
+
+### Propósito
+
+Este módulo permite a los Organizadores configurar su información legal, de contacto y bancaria para poder recibir pagos por las ventas realizadas en la plataforma.
+
+**Ubicación:** Configuración → Facturación y Pagos (`/settings/billing`)
+
+### Flujo de Configuración
+
+```mermaid
+flowchart TD
+    A[Acceder a Facturación y Pagos] --> B{¿Tipo de entidad seleccionado?}
+    B -->|No| C[Seleccionar tipo de entidad]
+    C --> D{¿Persona Natural o Jurídica?}
+    D -->|Natural| E[Formulario Persona Natural]
+    D -->|Jurídica| F[Formulario Persona Jurídica]
+    B -->|Sí| G[Mostrar formulario según tipo]
+    E --> H[Completar información legal]
+    F --> H
+    H --> I[Completar datos de contacto]
+    I --> J[Completar información bancaria]
+    J --> K[Cargar documentos soporte]
+    K --> L[Guardar configuración]
+    L --> M[Estado: Pendiente de verificación]
+    M --> N{¿Verificación exitosa?}
+    N -->|Sí| O[Estado: Verificada]
+    N -->|No| P[Estado: Rechazada]
+    P --> J
+```
+
+### Tipo de Entidad
+
+Al configurar la facturación por primera vez, debes seleccionar tu tipo de entidad:
+
+| Tipo | Descripción | Documentos Requeridos |
+|------|-------------|----------------------|
+| **Persona Natural** | Individuo que actúa a título personal | Cédula de ciudadanía |
+| **Persona Jurídica** | Empresa legalmente constituida | RUT |
+
+**Importante:** El tipo de entidad solo puede seleccionarse una vez. Cambios posteriores requieren contactar a Soporte.
+
+### Información Legal - Persona Natural
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| Nombre completo | Sí | Nombre legal completo |
+| Tipo de documento | Sí | Cédula de ciudadanía o extranjería |
+| Número de documento | Sí | Número del documento de identidad |
+| Dirección fiscal | Sí | Dirección oficial para efectos tributarios |
+| Copia de cédula | Sí | Archivo PDF, JPG o PNG |
+
+**Autocompletado:** Si eres Persona Natural, puedes usar la opción "Usar los mismos datos de mi perfil de registro" para pre-llenar algunos campos. Los datos autocompletados son editables.
+
+### Información Legal - Persona Jurídica
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| Razón social | Sí | Nombre legal de la empresa |
+| NIT | Sí | Número de Identificación Tributaria |
+| Dirección fiscal | Sí | Dirección oficial de la empresa |
+| RUT | Sí | Registro Único Tributario (solo PDF) |
+
+### Datos de Contacto
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| Email de contacto financiero | Sí | Para comunicaciones sobre pagos |
+| Teléfono principal | Sí | Número de contacto |
+| Dirección completa | Sí | Dirección física de contacto |
+
+### Información Bancaria
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| Titular de la cuenta | Sí | Nombre del titular |
+| Banco o proveedor | Sí | Institución financiera |
+| Tipo de cuenta | Sí | Ahorros, Corriente o Billetera digital |
+| Número de cuenta | Sí | Número de la cuenta bancaria |
+| Certificación bancaria | Sí | Documento del banco (PDF, JPG o PNG) |
+
+### Estados de Verificación
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pendiente: Guardar datos bancarios
+    Pendiente --> Verificada: Verificación exitosa
+    Pendiente --> Rechazada: Verificación fallida
+    Verificada --> Pendiente: Modificar datos bancarios
+    Rechazada --> Pendiente: Corregir datos bancarios
+```
+
+| Estado | Color | Descripción |
+|--------|-------|-------------|
+| **Pendiente** | 🟡 Amarillo | Cuenta en proceso de verificación. No se pueden recibir transferencias. |
+| **Verificada** | 🟢 Verde | Cuenta validada. Se pueden recibir transferencias. |
+| **Rechazada** | 🔴 Rojo | Verificación fallida. Se requiere corrección de datos. |
+
+**Importante:** 
+- Al guardar o modificar datos bancarios, el estado vuelve a "Pendiente"
+- No se pueden realizar transferencias mientras el estado sea diferente a "Verificada"
+
+---
+
+## Sistema de Errores
+
+### Propósito
+
+Cuando ocurre un error en la plataforma, el sistema muestra una página de error con un código de referencia. Este código permite al equipo de soporte identificar rápidamente la causa del problema.
+
+### Página de Error
+
+Cuando algo falla, verás:
+- Un mensaje amigable: "Oops! Tenemos un error"
+- Un código de referencia (ej: `AUTH-NET-001`)
+- Un botón para volver al inicio
+
+### Códigos de Error Comunes
+
+| Código | Situación | Qué hacer |
+|--------|-----------|-----------|
+| `AUTH-SSO-001` | Error del proveedor de autenticación | Intentar nuevamente el login |
+| `AUTH-SSO-002` | No se recibió autorización | Intentar nuevamente el login |
+| `AUTH-SSO-003` | Problema con cookies del navegador | Verificar que las cookies estén habilitadas |
+| `AUTH-TKN-001` | Error al procesar autenticación | Contactar a soporte si persiste |
+| `REG-NET-001` | Error de conexión al registrar | Verificar conexión a internet e intentar nuevamente |
+| `REG-DUP-001` | Email ya registrado | Iniciar sesión con la cuenta existente |
+| `SES-EXP-001` | Sesión expirada | Iniciar sesión nuevamente |
+| `NAV-NTF-001` | Página no encontrada | Verificar la URL o volver al inicio |
+
+### Cómo Reportar un Error
+
+1. Anota el código de error que aparece en pantalla
+2. Haz clic en el código para copiarlo al portapapeles
+3. Contacta a soporte incluyendo:
+   - El código de error
+   - Qué estabas haciendo cuando ocurrió
+   - Tu navegador y dispositivo
 
 ---
 
@@ -162,220 +480,130 @@ Esta pantalla aparece por 1-2 segundos mientras se crea tu sesión segura.
 La barra de navegación lateral está disponible en todas las pantallas después del login.
 
 **Características:**
-- **Collapsible**: Click en el icono `<` para contraer/expandir
-- **Icónos visuales**: Cada sección tiene un icono distintivo
+- **Collapsible**: Haz clic en el icono de flecha para contraer/expandir
+- **Iconos visuales**: Cada sección tiene un icono distintivo
 - **Menú dinámico**: Solo muestra las opciones relevantes para tu rol
 - **Avatar de usuario**: Muestra tu foto de perfil y nombre
 
-### Expandir/Contraer Sidebar
+### Estados de la Sidebar
 
-**Expandida (por defecto):**
-- Ancho: 256px
-- Muestra: Icono + Texto + Avatar completo
-- Ideal para: Pantallas de escritorio
-
-**Contraída:**
-- Ancho: 80px
-- Muestra: Solo iconos + Avatar reducido
-- Ideal para: Pantallas pequeñas o más espacio de trabajo
-
-**Cómo contraer/expandir:**
-1. Click en el botón de flecha en la parte superior de la sidebar
-2. El estado se mantiene durante tu sesión
+| Estado | Ancho | Muestra |
+|--------|-------|---------|
+| **Expandida** | 256px | Icono + Texto + Avatar completo |
+| **Contraída** | 80px | Solo iconos + Avatar reducido |
 
 ### Información de Usuario
 
 En la parte inferior de la sidebar:
-
-**Cuando está expandida:**
-- Avatar circular (foto de perfil)
+- Avatar circular con tu foto de perfil
 - Nombre completo
 - Rol asignado
-
-**Cuando está contraída:**
-- Avatar circular pequeño con iniciales
-
-**Click en el avatar:**
-- Abre un menú desplegable
-- Opción: "Cerrar sesión"
+- Menú desplegable con opción de cerrar sesión
 
 ---
 
 ## Cerrar Sesión
 
-### Método 1: Desde el Avatar
+### Cómo Cerrar Sesión
 
-1. Click en tu avatar en la parte inferior de la sidebar
-2. Se abre un menú desplegable
-3. Click en **"Cerrar sesión"**
-4. Serás redirigido automáticamente a la página de login
+1. Haz clic en tu avatar en la parte inferior de la sidebar
+2. Selecciona "Cerrar sesión" en el menú desplegable
+3. Serás redirigido automáticamente a la página de login
 
-### Método 2: URL Directa
+### Proceso de Cierre
 
-También puedes acceder directamente a:
-```
-/api/auth/logout
-```
-
-### Proceso de Cierre de Sesión
-
-**Lo que sucede automáticamente:**
-
-1. ✅ Se elimina tu sesión del servidor
-2. ✅ Se borran las cookies de autenticación
-3. ✅ Se limpian datos locales del navegador
-4. ✅ Se invalida tu token de sesión
-5. ✅ Redirigido a la página de login
-
-**Seguridad:**
-- Tu sesión es completamente eliminada
-- No quedan rastros en el navegador
-- Debes autenticarte nuevamente para acceder
+Al cerrar sesión, el sistema automáticamente:
+- ✅ Elimina tu sesión del servidor
+- ✅ Borra las cookies de autenticación
+- ✅ Limpia datos locales del navegador
+- ✅ Invalida tu token de sesión
 
 ### Cierre Automático de Sesión
 
-Tu sesión expirará automáticamente después de:
-
-| Ambiente | Duración |
-|----------|----------|
-| Desarrollo | 8 horas |
-| Staging | 24 horas |
-| Producción | 7 días |
-
-Cuando tu sesión expire, serás redirigido automáticamente al login.
+Tu sesión expirará automáticamente después de un periodo de inactividad. Cuando esto ocurra, serás redirigido automáticamente al login.
 
 ---
 
 ## Preguntas Frecuentes
 
-### ¿Por qué tengo que usar Google/Microsoft/Meta?
+### Autenticación
+
+**¿Por qué tengo que usar Google o Microsoft?**
 
 La plataforma usa autenticación federada (SSO) para:
 - **Seguridad**: No necesitas crear otra contraseña
 - **Conveniencia**: Usa tu cuenta existente
 - **Auditoría**: Mejor trazabilidad de accesos
-- **Separación de roles**: Cada tipo de usuario usa su sistema corporativo
 
-### ¿Qué pasa si no tengo cuenta de Google/Microsoft/Meta?
+**¿La plataforma guarda mi contraseña?**
 
-Contacta con tu administrador para:
-1. Obtener una cuenta del proveedor correspondiente a tu rol
-2. O solicitar un método alternativo de acceso
+No. La plataforma **nunca** ve ni guarda tu contraseña. La autenticación la maneja directamente Google o Microsoft.
 
-### ¿Puedo cambiar mi rol?
+**¿Qué información puede ver la plataforma de mi cuenta?**
 
-No. Los roles están asignados según tu proveedor de autenticación:
-- Google → Organizador
-- Microsoft → Proveedor
-- Meta → Pagador
-
-Si necesitas acceso a un rol diferente, deberás usar una cuenta del proveedor correspondiente.
-
-### ¿La plataforma guarda mi contraseña?
-
-No. La plataforma **nunca** ve ni guarda tu contraseña. La autenticación la maneja directamente Google, Microsoft o Meta, y solo recibimos confirmación de que te autenticaste correctamente.
-
-### ¿Puedo usar la plataforma en móvil?
-
-Sí. La plataforma es responsive y funciona en:
-- 📱 Teléfonos móviles
-- 📱 Tablets
-- 💻 Laptops
-- 🖥️ Desktops
-
-El sidebar se adapta automáticamente al tamaño de pantalla.
-
-### ¿Qué información puede ver la plataforma de mi cuenta?
-
-La plataforma solo accede a:
+Solo accedemos a:
 - ✅ Tu nombre completo
 - ✅ Tu dirección de email
 - ✅ Tu foto de perfil
-- ❌ NO accede a tus emails
-- ❌ NO accede a tus archivos
-- ❌ NO accede a tus contactos
+- ❌ NO accedemos a tus emails, archivos o contactos
 
-### ¿Qué hago si no puedo iniciar sesión?
+### Roles y Acceso
 
-**Problemas comunes y soluciones:**
+**¿Puedo tener múltiples roles?**
 
-**1. Error: "Popup bloqueado"**
-- Solución: La plataforma usa redirect completo, no popups. Este error no debería aparecer.
+Sí. Si tienes múltiples roles, al iniciar sesión verás una pantalla para seleccionar con qué rol deseas trabajar.
 
-**2. Error: "redirect_uri_mismatch"**
-- Solución: Contacta con tu administrador. La configuración del SSO necesita actualizarse.
+**¿Puedo cambiar mi rol durante la sesión?**
 
-**3. Error: "invalid_client"**
-- Solución: Contacta con tu administrador. Hay un problema con las credenciales de la plataforma.
+No. Para cambiar de rol, debes cerrar sesión e iniciar nuevamente, seleccionando el rol deseado.
 
-**4. Error: "access_denied"**
-- Solución: No autorizaste el acceso. Intenta nuevamente y acepta los permisos solicitados.
+### Facturación
 
-**5. La pantalla de procesamiento no avanza**
-- Solución: 
-  1. Verifica tu conexión a internet
-  2. Recarga la página
-  3. Intenta en modo incógnito
-  4. Contacta con soporte técnico
+**¿Por qué necesito verificar mi cuenta bancaria?**
 
-### ¿Puedo tener múltiples sesiones abiertas?
+La verificación protege contra fraudes y errores, asegurando que los pagos lleguen al titular correcto.
 
-Sí. Puedes iniciar sesión en múltiples dispositivos/navegadores simultáneamente. Cada sesión es independiente.
+**¿Cuánto tiempo tarda la verificación?**
 
-### ¿Cómo reporto un problema?
+El proceso de verificación puede tomar entre 1 a 3 días hábiles.
 
-1. Toma una captura de pantalla del error
-2. Anota qué estabas haciendo cuando ocurrió
-3. Contacta con soporte técnico incluyendo:
-   - Tu rol (Organizador/Proveedor/Pagador)
-   - Navegador y versión
-   - Descripción del problema
-   - Capturas de pantalla
+**¿Puedo cambiar mi tipo de entidad después de configurarlo?**
 
-### ¿La plataforma es segura?
+No directamente. Cambios en el tipo de entidad requieren contactar a Soporte.
 
-Sí. La plataforma implementa múltiples capas de seguridad:
+### Problemas Técnicos
 
-- 🔒 **HTTPS**: Todas las comunicaciones encriptadas
-- 🔒 **OAuth 2.0 + PKCE**: Estándar de industria para autenticación
-- 🔒 **HttpOnly Cookies**: Sesión no accesible desde JavaScript
-- 🔒 **Tokens firmados**: Verificación criptográfica en cada request
-- 🔒 **Sesiones temporales**: Expiración automática
-- 🔒 **Logout seguro**: Eliminación completa de sesión
+**¿Qué hago si veo un código de error?**
 
-### ¿Qué navegadores son compatibles?
+1. Anota el código que aparece
+2. Intenta la acción nuevamente
+3. Si persiste, contacta a soporte con el código
 
-**Totalmente compatibles:**
-- ✅ Google Chrome (recomendado)
-- ✅ Microsoft Edge
-- ✅ Firefox
-- ✅ Safari
+**¿Qué navegadores son compatibles?**
 
-**Versiones mínimas:**
-- Chrome 90+
-- Edge 90+
-- Firefox 88+
-- Safari 14+
+- ✅ Google Chrome 90+
+- ✅ Microsoft Edge 90+
+- ✅ Firefox 88+
+- ✅ Safari 14+
+
+**¿La plataforma funciona en móvil?**
+
+Sí. La plataforma es responsive y funciona en teléfonos, tablets, laptops y desktops.
 
 ---
 
 ## Glosario
 
-**SSO (Single Sign-On)**: Sistema que permite usar una sola identidad para acceder a múltiples aplicaciones.
-
-**OAuth 2.0**: Protocolo estándar de autorización para aplicaciones web.
-
-**PKCE**: Extensión de seguridad de OAuth 2.0 que protege el flujo de autenticación.
-
-**ID Token**: Token que contiene información verificada del usuario autenticado.
-
-**Sesión**: Período de tiempo en el que estás autenticado en la plataforma.
-
-**Dashboard**: Página principal personalizada según tu rol.
-
-**Rol**: Tipo de usuario que determina tus permisos y accesos.
-
-**Provider**: Servicio de autenticación (Google, Microsoft, Meta).
+| Término | Definición |
+|---------|------------|
+| **SSO (Single Sign-On)** | Sistema que permite usar una sola identidad para acceder a múltiples aplicaciones |
+| **OAuth 2.0** | Protocolo estándar de autorización para aplicaciones web |
+| **Dashboard** | Página principal personalizada según tu rol |
+| **Rol** | Tipo de usuario que determina tus permisos y accesos |
+| **Onboarding** | Proceso de registro inicial para nuevos usuarios |
+| **KPI** | Indicador clave de rendimiento (Key Performance Indicator) |
+| **Comisión** | Porcentaje de ganancia del organizador por ventas |
+| **Verificación** | Proceso de validación de cuenta bancaria |
 
 ---
 
@@ -393,6 +621,5 @@ Para asistencia adicional:
 
 ---
 
-_Última actualización: Noviembre 2024_
-_Versión: 1.0_
-
+_Última actualización: Diciembre 2024_
+_Versión: 2.0_
