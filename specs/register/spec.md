@@ -21,6 +21,7 @@ Implementar un sistema de registro y validación de usuarios que, después de un
 - Gestión de roles por administradores
 - Integración directa con SDK de Supabase
 - Sistema de códigos de error (ver `specs/errors/`)
+- **Configuración de facturación y pagos del Organizer** (ver `specs/settings/provider/billing/spec.md`) - Se realiza post-onboarding en `/settings/billing`
 
 ---
 
@@ -701,6 +702,7 @@ lib/
 ## Especificaciones Relacionadas
 
 - **Manejo de Errores:** Ver `specs/errors/spec.md` para el sistema de códigos de error y página de error genérica.
+- **Configuración de Facturación (Organizer):** Ver `specs/settings/provider/billing/spec.md` para la configuración de datos fiscales y bancarios. Este flujo se realiza **después del onboarding**, cuando el organizador necesita configurar sus datos para recibir pagos.
 
 ---
 

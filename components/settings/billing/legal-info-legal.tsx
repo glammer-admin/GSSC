@@ -9,7 +9,12 @@ import { ALLOWED_FILE_FORMATS } from "@/lib/types/billing/types"
 interface LegalInfoLegalProps {
   value: Partial<LegalEntityLegalInfo>
   onChange: (value: Partial<LegalEntityLegalInfo>) => void
-  onFileChange: (fileName: string | undefined) => void
+  /**
+   * Callback cuando se selecciona o elimina el archivo RUT.
+   * Recibe el objeto File o undefined si se elimina.
+   * El archivo se enviará junto con el formulario al guardar.
+   */
+  onFileChange: (file: File | undefined) => void
   errors?: Partial<Record<keyof LegalEntityLegalInfo, string>>
   disabled?: boolean
 }
@@ -19,9 +24,12 @@ interface LegalInfoLegalProps {
  * 
  * Campos obligatorios:
  * - Razón social
- * - NIT
+ * - NIT (9-10 dígitos)
  * - Dirección fiscal
- * - RUT (RN-04)
+ * - RUT (RN-06)
+ * 
+ * NOTA: El documento NO se sube inmediatamente. Se almacena en memoria
+ * y se envía junto con el formulario al guardar (RN-22).
  */
 export function LegalInfoLegal({
   value,
@@ -65,12 +73,15 @@ export function LegalInfoLegal({
           </Label>
           <Input
             id="nit"
-            placeholder="Ej: 900123456-7"
+            placeholder="Ingresa el NIT (9-10 dígitos)"
             value={value.nit || ""}
             onChange={(e) => updateField("nit", e.target.value)}
             disabled={disabled}
             aria-invalid={!!errors.nit}
           />
+          <p className="text-xs text-muted-foreground">
+            El NIT debe tener entre 9 y 10 dígitos
+          </p>
           {errors.nit && (
             <p className="text-sm text-destructive">{errors.nit}</p>
           )}
@@ -102,10 +113,12 @@ export function LegalInfoLegal({
           <DocumentUpload
             label="Documento RUT"
             accept={ALLOWED_FILE_FORMATS.rut.map((f) => `.${f}`).join(",")}
+            documentType="rut"
             currentFile={value.rutDocumentUrl}
-            onFileSelect={onFileChange}
+            onFileChange={onFileChange}
             disabled={disabled}
             hint={`Solo formato: ${ALLOWED_FILE_FORMATS.rut.join(", ").toUpperCase()}`}
+            hasError={!!errors.rutDocumentUrl}
           />
           {errors.rutDocumentUrl && (
             <p className="text-sm text-destructive">{errors.rutDocumentUrl}</p>
@@ -115,4 +128,3 @@ export function LegalInfoLegal({
     </div>
   )
 }
-
