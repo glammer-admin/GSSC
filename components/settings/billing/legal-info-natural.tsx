@@ -16,7 +16,12 @@ import { DOCUMENT_TYPES, ALLOWED_FILE_FORMATS } from "@/lib/types/billing/types"
 interface LegalInfoNaturalProps {
   value: Partial<NaturalPersonLegalInfo>
   onChange: (value: Partial<NaturalPersonLegalInfo>) => void
-  onFileChange: (fileName: string | undefined) => void
+  /**
+   * Callback cuando se selecciona o elimina el archivo de cédula.
+   * Recibe el objeto File o undefined si se elimina.
+   * El archivo se enviará junto con el formulario al guardar.
+   */
+  onFileChange: (file: File | undefined) => void
   errors?: Partial<Record<keyof NaturalPersonLegalInfo, string>>
   disabled?: boolean
 }
@@ -27,9 +32,12 @@ interface LegalInfoNaturalProps {
  * Campos obligatorios:
  * - Nombre completo
  * - Tipo de documento
- * - Número de documento
+ * - Número de documento (6-10 dígitos)
  * - Dirección fiscal
- * - Copia de cédula (RN-03)
+ * - Copia de cédula (RN-05)
+ * 
+ * NOTA: El documento NO se sube inmediatamente. Se almacena en memoria
+ * y se envía junto con el formulario al guardar (RN-22).
  */
 export function LegalInfoNatural({
   value,
@@ -99,7 +107,7 @@ export function LegalInfoNatural({
           </Label>
           <Input
             id="documentNumber"
-            placeholder="Ingresa tu número de documento"
+            placeholder="Ingresa tu número de documento (6-10 dígitos)"
             value={value.documentNumber || ""}
             onChange={(e) => updateField("documentNumber", e.target.value)}
             disabled={disabled}
@@ -136,10 +144,12 @@ export function LegalInfoNatural({
           <DocumentUpload
             label="Cédula de identidad"
             accept={ALLOWED_FILE_FORMATS.idDocument.map((f) => `.${f}`).join(",")}
+            documentType="id_document"
             currentFile={value.idDocumentUrl}
-            onFileSelect={onFileChange}
+            onFileChange={onFileChange}
             disabled={disabled}
             hint={`Formatos permitidos: ${ALLOWED_FILE_FORMATS.idDocument.join(", ").toUpperCase()}`}
+            hasError={!!errors.idDocumentUrl}
           />
           {errors.idDocumentUrl && (
             <p className="text-sm text-destructive">{errors.idDocumentUrl}</p>
@@ -149,4 +159,3 @@ export function LegalInfoNatural({
     </div>
   )
 }
-

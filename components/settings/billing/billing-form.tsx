@@ -55,6 +55,11 @@ interface FormErrors {
  * - Datos de contacto
  * - Información bancaria
  * - Estado de verificación
+ * 
+ * IMPORTANTE (RN-22, RN-23):
+ * Los documentos NO se suben inmediatamente al seleccionarlos.
+ * Se almacenan en memoria y se envían junto con el formulario al guardar.
+ * El servidor procesa todo atómicamente con rollback si falla alguna subida.
  */
 export function BillingForm({
   organizerId,
@@ -84,16 +89,15 @@ export function BillingForm({
     initialSettings?.verificationStatus || null
   )
 
-  // Estado de archivos (mock)
-  const [idDocumentFileName, setIdDocumentFileName] = useState<string | undefined>(
-    initialSettings?.naturalPersonInfo?.idDocumentUrl
-  )
-  const [rutDocumentFileName, setRutDocumentFileName] = useState<string | undefined>(
-    initialSettings?.legalEntityInfo?.rutDocumentUrl
-  )
-  const [bankCertificateFileName, setBankCertificateFileName] = useState<string | undefined>(
-    initialSettings?.bankInfo?.bankCertificateUrl
-  )
+  // Estado de archivos (File objects en memoria)
+  const [idDocumentFile, setIdDocumentFile] = useState<File | undefined>(undefined)
+  const [rutDocumentFile, setRutDocumentFile] = useState<File | undefined>(undefined)
+  const [bankCertificateFile, setBankCertificateFile] = useState<File | undefined>(undefined)
+
+  // Para mostrar nombres de archivos existentes (ya guardados en el servidor)
+  const existingIdDocumentUrl = initialSettings?.naturalPersonInfo?.idDocumentUrl
+  const existingRutDocumentUrl = initialSettings?.legalEntityInfo?.rutDocumentUrl
+  const existingBankCertificateUrl = initialSettings?.bankInfo?.bankCertificateUrl
 
   // Estado de autocompletado
   const [useProfileData, setUseProfileData] = useState(false)
@@ -120,6 +124,11 @@ export function BillingForm({
       }
     }
   }, [userData, entityType])
+
+  // Verificar si hay un documento disponible (nuevo o existente)
+  const hasIdDocument = !!idDocumentFile || !!existingIdDocumentUrl
+  const hasRutDocument = !!rutDocumentFile || !!existingRutDocumentUrl
+  const hasBankCertificate = !!bankCertificateFile || !!existingBankCertificateUrl
 
   // Validar formulario
   const validateForm = (): boolean => {
@@ -151,7 +160,8 @@ export function BillingForm({
         naturalErrors.fiscalAddress = "La dirección fiscal es obligatoria"
         isValid = false
       }
-      if (!idDocumentFileName) {
+      // RN-05: Documento de identidad obligatorio
+      if (!hasIdDocument) {
         naturalErrors.idDocumentUrl = "La copia de la cédula es obligatoria"
         isValid = false
       }
@@ -172,7 +182,8 @@ export function BillingForm({
         legalErrors.fiscalAddress = "La dirección fiscal es obligatoria"
         isValid = false
       }
-      if (!rutDocumentFileName) {
+      // RN-06: RUT obligatorio para persona jurídica
+      if (!hasRutDocument) {
         legalErrors.rutDocumentUrl = "El RUT es obligatorio"
         isValid = false
       }
@@ -220,7 +231,8 @@ export function BillingForm({
       bankErrors.accountNumber = "El número de cuenta es obligatorio"
       isValid = false
     }
-    if (!bankCertificateFileName) {
+    // RN-07: Certificación bancaria obligatoria
+    if (!hasBankCertificate) {
       bankErrors.bankCertificateUrl = "La certificación bancaria es obligatoria"
       isValid = false
     }
@@ -244,39 +256,68 @@ export function BillingForm({
     setIsSubmitting(true)
 
     try {
-      const input: BillingSettingsInput = {
+      // Construir datos del formulario (sin archivos)
+      const formDataJson: BillingSettingsInput = {
         entityType: entityType!,
         contactInfo: contactInfo as ContactInfo,
         bankInfo: bankInfo as Omit<BankInfo, "bankCertificateUrl">,
-        bankCertificateFileName,
       }
 
       if (entityType === "natural") {
-        input.naturalPersonInfo = naturalPersonInfo as Omit<NaturalPersonLegalInfo, "idDocumentUrl">
-        input.idDocumentFileName = idDocumentFileName
+        formDataJson.naturalPersonInfo = naturalPersonInfo as Omit<NaturalPersonLegalInfo, "idDocumentUrl">
       } else if (entityType === "legal") {
-        input.legalEntityInfo = legalEntityInfo as Omit<LegalEntityLegalInfo, "rutDocumentUrl">
-        input.rutDocumentFileName = rutDocumentFileName
+        formDataJson.legalEntityInfo = legalEntityInfo as Omit<LegalEntityLegalInfo, "rutDocumentUrl">
       }
 
+      // Crear FormData con datos JSON y archivos
+      const formData = new FormData()
+      formData.append("data", JSON.stringify(formDataJson))
+
+      // Agregar archivos si existen (nuevos archivos seleccionados)
+      if (idDocumentFile) {
+        formData.append("id_document_file", idDocumentFile)
+      }
+      if (rutDocumentFile) {
+        formData.append("rut_file", rutDocumentFile)
+      }
+      if (bankCertificateFile) {
+        formData.append("bank_certificate_file", bankCertificateFile)
+      }
+
+      // Enviar como multipart/form-data
       const response = await fetch("/api/settings/billing", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(input),
+        body: formData,
+        // No establecer Content-Type, el navegador lo hace automáticamente con boundary
       })
+
+      // Verificar si la respuesta es JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text()
+        console.error("Non-JSON response:", text)
+        throw new Error("Error de servidor. Intenta nuevamente.")
+      }
 
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "Error al guardar la configuración")
+        // Manejar error específico de subida de documentos (RN-23)
+        if (result.error === "DOCUMENT_UPLOAD_FAILED") {
+          throw new Error(result.message || "Error al subir los documentos. Intenta nuevamente.")
+        }
+        throw new Error(result.message || result.error || "Error al guardar la configuración")
       }
 
       // Actualizar estado con la respuesta
       if (result.data) {
         setEntityTypeLocked(result.data.entityTypeLocked)
         setVerificationStatus(result.data.verificationStatus)
+        
+        // Limpiar archivos en memoria (ya están guardados)
+        setIdDocumentFile(undefined)
+        setRutDocumentFile(undefined)
+        setBankCertificateFile(undefined)
       }
 
       toast.success("Configuración guardada exitosamente")
@@ -290,6 +331,19 @@ export function BillingForm({
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Handlers para archivos que actualizan el estado con File objects
+  const handleIdDocumentChange = (file: File | undefined) => {
+    setIdDocumentFile(file)
+  }
+
+  const handleRutDocumentChange = (file: File | undefined) => {
+    setRutDocumentFile(file)
+  }
+
+  const handleBankCertificateChange = (file: File | undefined) => {
+    setBankCertificateFile(file)
   }
 
   return (
@@ -331,7 +385,7 @@ export function BillingForm({
               <LegalInfoNatural
                 value={naturalPersonInfo}
                 onChange={setNaturalPersonInfo}
-                onFileChange={setIdDocumentFileName}
+                onFileChange={handleIdDocumentChange}
                 errors={errors.naturalPersonInfo}
                 disabled={isSubmitting}
               />
@@ -339,7 +393,7 @@ export function BillingForm({
               <LegalInfoLegal
                 value={legalEntityInfo}
                 onChange={setLegalEntityInfo}
-                onFileChange={setRutDocumentFileName}
+                onFileChange={handleRutDocumentChange}
                 errors={errors.legalEntityInfo}
                 disabled={isSubmitting}
               />
@@ -385,7 +439,7 @@ export function BillingForm({
             <BankInfoForm
               value={bankInfo}
               onChange={setBankInfo}
-              onFileChange={setBankCertificateFileName}
+              onFileChange={handleBankCertificateChange}
               errors={errors.bankInfo}
               disabled={isSubmitting}
             />
@@ -419,4 +473,3 @@ export function BillingForm({
     </form>
   )
 }
-

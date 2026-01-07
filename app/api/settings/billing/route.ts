@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession, isCompleteSession } from "@/lib/auth/session-manager"
+import { getBillingClient, getStorageClient, HttpError, NetworkError } from "@/lib/http/billing"
 import {
-  loadBillingSettings,
-  saveBillingSettings,
-  isEntityTypeLocked,
-} from "@/lib/mocks/billing-loader"
-import type {
-  BillingSettingsInput,
-  BillingSettingsResponse,
-  SaveBillingResponse,
+  toBillingSettings,
+  toBackendDocumentType,
+  BILLING_DOCUMENTS_BUCKET,
+  type BillingSettingsInput,
+  type BillingSettingsResponse,
+  type SaveBillingResponse,
+  type CreateBillingProfileDTO,
+  type UpdateBillingProfileDTO,
+  type BillingDocumentType,
+  type CreateBillingDocumentDTO,
 } from "@/lib/types/billing/types"
+
+// Configuración del runtime para Next.js App Router
+// maxDuration aumenta el tiempo de ejecución para subidas de archivos
+export const maxDuration = 60
 
 /**
  * GET /api/settings/billing
@@ -36,15 +43,36 @@ export async function GET(): Promise<NextResponse<BillingSettingsResponse>> {
       )
     }
 
-    const organizerId = session.userId || session.sub
-    const settings = loadBillingSettings(organizerId)
+    const userId = session.userId || session.sub
+    const billingClient = getBillingClient()
+
+    // Obtener todos los datos de billing
+    const billingData = await billingClient.getBillingData(userId)
+
+    // Convertir a formato legacy para compatibilidad con UI existente
+    const settings = toBillingSettings(billingData, userId)
 
     return NextResponse.json({
       success: true,
-      data: settings ?? undefined,
+      data: settings,
     })
   } catch (error) {
     console.error("Error loading billing settings:", error)
+    
+    if (error instanceof HttpError) {
+      return NextResponse.json(
+        { success: false, error: `Error del servidor: ${error.status}` },
+        { status: error.status }
+      )
+    }
+    
+    if (error instanceof NetworkError) {
+      return NextResponse.json(
+        { success: false, error: "Error de conexión con el servidor" },
+        { status: 503 }
+      )
+    }
+    
     return NextResponse.json(
       { success: false, error: "Error interno del servidor" },
       { status: 500 }
@@ -53,13 +81,54 @@ export async function GET(): Promise<NextResponse<BillingSettingsResponse>> {
 }
 
 /**
+ * Información de un archivo subido (para rollback)
+ */
+interface UploadedFile {
+  path: string
+  documentType: BillingDocumentType
+}
+
+/**
+ * Realiza rollback de archivos ya subidos en caso de error
+ */
+async function rollbackUploadedFiles(uploadedFiles: UploadedFile[]): Promise<void> {
+  const storageClient = getStorageClient()
+  
+  for (const file of uploadedFiles) {
+    try {
+      console.log(`🔄 [ROLLBACK] Eliminando archivo: ${file.path}`)
+      await storageClient.deleteDocument(file.path)
+      console.log(`✅ [ROLLBACK] Archivo eliminado: ${file.path}`)
+    } catch (error) {
+      // Log pero no fallar - el rollback es best-effort
+      console.error(`❌ [ROLLBACK] Error eliminando ${file.path}:`, error)
+    }
+  }
+}
+
+/**
  * POST /api/settings/billing
  * 
- * Crea o actualiza la configuración de facturación del organizador
+ * Crea o actualiza la configuración de facturación del organizador.
+ * 
+ * IMPORTANTE (RN-22, RN-23):
+ * - Acepta multipart/form-data con archivos adjuntos
+ * - Los documentos se suben primero al Storage
+ * - Si falla alguna subida, se hace rollback de los ya subidos
+ * - Solo después de subir todos los documentos se guarda en BD
+ * 
+ * Campos esperados en FormData:
+ * - data: JSON string con BillingSettingsInput
+ * - id_document_file: File (opcional, solo para persona natural)
+ * - rut_file: File (opcional, solo para persona jurídica)
+ * - bank_certificate_file: File (obligatorio)
  */
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<SaveBillingResponse>> {
+  // Track de archivos subidos para rollback
+  const uploadedFiles: UploadedFile[] = []
+  
   try {
     // Validar sesión
     const session = await getSession()
@@ -79,18 +148,42 @@ export async function POST(
       )
     }
 
-    const organizerId = session.userId || session.sub
+    const userId = session.userId || session.sub
 
-    // Parsear body
-    let input: BillingSettingsInput
+    // Parsear FormData
+    let formData: FormData
     try {
-      input = await request.json()
+      formData = await request.formData()
     } catch {
       return NextResponse.json(
-        { success: false, error: "Datos inválidos" },
+        { success: false, error: "Formato de datos inválido. Use multipart/form-data." },
         { status: 400 }
       )
     }
+
+    // Extraer datos JSON
+    const dataString = formData.get("data") as string | null
+    if (!dataString) {
+      return NextResponse.json(
+        { success: false, error: "El campo 'data' es obligatorio" },
+        { status: 400 }
+      )
+    }
+
+    let input: BillingSettingsInput
+    try {
+      input = JSON.parse(dataString)
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "El campo 'data' debe ser JSON válido" },
+        { status: 400 }
+      )
+    }
+
+    // Extraer archivos
+    const idDocumentFile = formData.get("id_document_file") as File | null
+    const rutFile = formData.get("rut_file") as File | null
+    const bankCertificateFile = formData.get("bank_certificate_file") as File | null
 
     // Validar que se proporcione tipo de entidad
     if (!input.entityType) {
@@ -100,22 +193,29 @@ export async function POST(
       )
     }
 
-    // Cargar configuración existente
-    const existingSettings = loadBillingSettings(organizerId)
+    const billingClient = getBillingClient()
+    const storageClient = getStorageClient()
+
+    // Verificar si ya existe un perfil
+    const existingProfile = await billingClient.getBillingProfile(userId)
+    const existingDocuments = await billingClient.getBillingDocuments(userId)
 
     // RN-01: Verificar si el tipo de entidad está bloqueado
-    if (isEntityTypeLocked(organizerId)) {
-      if (existingSettings?.entityType !== input.entityType) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "ENTITY_TYPE_LOCKED",
-            message: "El tipo de entidad no puede cambiarse. Contacta a Soporte.",
-          },
-          { status: 400 }
-        )
-      }
+    if (existingProfile && existingProfile.entity_type !== input.entityType) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "ENTITY_TYPE_LOCKED",
+          message: "El tipo de entidad no puede cambiarse. Contacta a Soporte.",
+        },
+        { status: 400 }
+      )
     }
+
+    // Verificar documentos existentes
+    const hasExistingIdDocument = existingDocuments.some(d => d.document_type === "id_document")
+    const hasExistingRut = existingDocuments.some(d => d.document_type === "rut")
+    const hasExistingBankCertificate = existingDocuments.some(d => d.document_type === "bank_certificate")
 
     // Validaciones según tipo de entidad
     if (input.entityType === "natural") {
@@ -132,6 +232,20 @@ export async function POST(
           { status: 400 }
         )
       }
+      // Validar formato de documento
+      if (!/^\d{6,10}$/.test(documentNumber)) {
+        return NextResponse.json(
+          { success: false, error: "INVALID_DOCUMENT_NUMBER", message: "El número de documento debe tener entre 6 y 10 dígitos" },
+          { status: 400 }
+        )
+      }
+      // RN-05: Documento de identidad obligatorio (nuevo archivo o existente)
+      if (!idDocumentFile && !hasExistingIdDocument) {
+        return NextResponse.json(
+          { success: false, error: "MISSING_ID_DOCUMENT", message: "La copia de la cédula es obligatoria" },
+          { status: 400 }
+        )
+      }
     } else if (input.entityType === "legal") {
       if (!input.legalEntityInfo) {
         return NextResponse.json(
@@ -143,6 +257,20 @@ export async function POST(
       if (!businessName || !nit || !fiscalAddress) {
         return NextResponse.json(
           { success: false, error: "Todos los campos de información legal son obligatorios" },
+          { status: 400 }
+        )
+      }
+      // Validar formato de NIT
+      if (!/^\d{9,10}$/.test(nit)) {
+        return NextResponse.json(
+          { success: false, error: "INVALID_TAX_ID", message: "El NIT debe tener entre 9 y 10 dígitos" },
+          { status: 400 }
+        )
+      }
+      // RN-06: RUT obligatorio (nuevo archivo o existente)
+      if (!rutFile && !hasExistingRut) {
+        return NextResponse.json(
+          { success: false, error: "MISSING_RUT", message: "El RUT es obligatorio" },
           { status: 400 }
         )
       }
@@ -186,21 +314,244 @@ export async function POST(
         { status: 400 }
       )
     }
+    // Validar formato de número de cuenta
+    if (!/^\d{6,20}$/.test(accountNumber)) {
+      return NextResponse.json(
+        { success: false, error: "INVALID_ACCOUNT_NUMBER", message: "El número de cuenta debe tener entre 6 y 20 dígitos" },
+        { status: 400 }
+      )
+    }
 
-    // Guardar configuración
-    const savedSettings = saveBillingSettings(organizerId, input, existingSettings)
+    // RN-07: Certificación bancaria obligatoria (nuevo archivo o existente)
+    if (!bankCertificateFile && !hasExistingBankCertificate) {
+      return NextResponse.json(
+        { success: false, error: "MISSING_BANK_CERTIFICATE", message: "La certificación bancaria es obligatoria" },
+        { status: 400 }
+      )
+    }
 
-    return NextResponse.json({
-      success: true,
-      data: savedSettings,
-      message: "Configuración guardada exitosamente",
-    })
+    // ========================================
+    // PASO 1: Subir documentos al Storage
+    // (RN-22, RN-23: Subida atómica con rollback)
+    // ========================================
+    
+    console.log("📤 [BILLING] Iniciando subida de documentos...")
+
+    // Subir documento de identidad (si hay nuevo archivo)
+    if (idDocumentFile) {
+      try {
+        const timestamp = Date.now()
+        const sanitizedName = idDocumentFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+        const filename = `${timestamp}_${sanitizedName}`
+        const fileBuffer = Buffer.from(await idDocumentFile.arrayBuffer())
+        
+        const result = await storageClient.uploadDocument(userId, "id_document", fileBuffer, filename)
+        
+        if (!result.success) {
+          throw new Error(result.error || "Error al subir documento de identidad")
+        }
+        
+        uploadedFiles.push({ path: result.path, documentType: "id_document" })
+        console.log(`✅ [BILLING] Documento de identidad subido: ${result.path}`)
+      } catch (error) {
+        console.error("❌ [BILLING] Error subiendo documento de identidad:", error)
+        await rollbackUploadedFiles(uploadedFiles)
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: "DOCUMENT_UPLOAD_FAILED", 
+            message: "Error al subir el documento de identidad. Intenta nuevamente." 
+          },
+          { status: 500 }
+        )
+      }
+    }
+
+    // Subir RUT (si hay nuevo archivo)
+    if (rutFile) {
+      try {
+        const timestamp = Date.now()
+        const sanitizedName = rutFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+        const filename = `${timestamp}_${sanitizedName}`
+        const fileBuffer = Buffer.from(await rutFile.arrayBuffer())
+        
+        const result = await storageClient.uploadDocument(userId, "rut", fileBuffer, filename)
+        
+        if (!result.success) {
+          throw new Error(result.error || "Error al subir RUT")
+        }
+        
+        uploadedFiles.push({ path: result.path, documentType: "rut" })
+        console.log(`✅ [BILLING] RUT subido: ${result.path}`)
+      } catch (error) {
+        console.error("❌ [BILLING] Error subiendo RUT:", error)
+        await rollbackUploadedFiles(uploadedFiles)
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: "DOCUMENT_UPLOAD_FAILED", 
+            message: "Error al subir el RUT. Intenta nuevamente." 
+          },
+          { status: 500 }
+        )
+      }
+    }
+
+    // Subir certificación bancaria (si hay nuevo archivo)
+    if (bankCertificateFile) {
+      try {
+        const timestamp = Date.now()
+        const sanitizedName = bankCertificateFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+        const filename = `${timestamp}_${sanitizedName}`
+        const fileBuffer = Buffer.from(await bankCertificateFile.arrayBuffer())
+        
+        const result = await storageClient.uploadDocument(userId, "bank_certificate", fileBuffer, filename)
+        
+        if (!result.success) {
+          throw new Error(result.error || "Error al subir certificación bancaria")
+        }
+        
+        uploadedFiles.push({ path: result.path, documentType: "bank_certificate" })
+        console.log(`✅ [BILLING] Certificación bancaria subida: ${result.path}`)
+      } catch (error) {
+        console.error("❌ [BILLING] Error subiendo certificación bancaria:", error)
+        await rollbackUploadedFiles(uploadedFiles)
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: "DOCUMENT_UPLOAD_FAILED", 
+            message: "Error al subir la certificación bancaria. Intenta nuevamente." 
+          },
+          { status: 500 }
+        )
+      }
+    }
+
+    console.log(`📤 [BILLING] Documentos subidos exitosamente: ${uploadedFiles.length}`)
+
+    // ========================================
+    // PASO 2: Guardar datos en base de datos
+    // ========================================
+    
+    try {
+      let savedProfile
+
+      if (existingProfile) {
+        // Actualizar perfil existente
+        const updateData: UpdateBillingProfileDTO = {
+          fiscal_address: address,
+          contact_email: email,
+          contact_phone: phone,
+        }
+
+        if (input.entityType === "natural" && input.naturalPersonInfo) {
+          updateData.full_name = input.naturalPersonInfo.fullName
+          updateData.document_type = toBackendDocumentType(input.naturalPersonInfo.documentType)
+          updateData.document_number = input.naturalPersonInfo.documentNumber
+        } else if (input.entityType === "legal" && input.legalEntityInfo) {
+          updateData.full_name = input.legalEntityInfo.businessName
+          updateData.tax_id = input.legalEntityInfo.nit
+        }
+
+        savedProfile = await billingClient.updateBillingProfile(userId, updateData)
+      } else {
+        // Crear nuevo perfil
+        const createData: CreateBillingProfileDTO = {
+          user_id: userId,
+          entity_type: input.entityType,
+          full_name: input.entityType === "natural" 
+            ? input.naturalPersonInfo!.fullName 
+            : input.legalEntityInfo!.businessName,
+          document_type: input.entityType === "natural"
+            ? toBackendDocumentType(input.naturalPersonInfo!.documentType)
+            : "CC", // Default para legal, el documento principal es el RUT
+          document_number: input.entityType === "natural"
+            ? input.naturalPersonInfo!.documentNumber
+            : "0000000000", // Placeholder para legal
+          fiscal_address: address,
+          contact_email: email,
+          contact_phone: phone,
+        }
+
+        if (input.entityType === "legal" && input.legalEntityInfo) {
+          createData.tax_id = input.legalEntityInfo.nit
+        }
+
+        savedProfile = await billingClient.createBillingProfile(createData)
+      }
+
+      // Manejar cuenta bancaria
+      const existingAccounts = await billingClient.getBankAccounts(userId)
+      const activeAccount = existingAccounts.find(a => a.is_active)
+
+      if (activeAccount) {
+        // Actualizar cuenta activa existente
+        await billingClient.updateBankAccount(activeAccount.id, {
+          holder_name: accountHolder,
+          bank_name: bankOrProvider,
+          account_type: accountType,
+          account_number: accountNumber,
+        })
+      } else {
+        // Crear nueva cuenta bancaria
+        await billingClient.createBankAccount({
+          user_id: userId,
+          holder_name: accountHolder,
+          bank_name: bankOrProvider,
+          account_type: accountType,
+          account_number: accountNumber,
+        })
+      }
+
+      // Crear referencias de documentos en BD
+      for (const uploadedFile of uploadedFiles) {
+        const createDocData: CreateBillingDocumentDTO = {
+          user_id: userId,
+          document_type: uploadedFile.documentType,
+          document_name: uploadedFile.path.split("/").pop() || uploadedFile.documentType,
+          storage_bucket: BILLING_DOCUMENTS_BUCKET,
+          storage_path: uploadedFile.path,
+        }
+        await billingClient.createBillingDocument(createDocData)
+      }
+
+      // Obtener datos actualizados
+      const billingData = await billingClient.getBillingData(userId)
+      const settings = toBillingSettings(billingData, userId)
+
+      console.log("✅ [BILLING] Configuración guardada exitosamente")
+
+      return NextResponse.json({
+        success: true,
+        data: settings,
+        message: "Configuración guardada exitosamente",
+      })
+    } catch (dbError) {
+      // Si falla el guardado en BD, hacer rollback de archivos
+      console.error("❌ [BILLING] Error guardando en BD, ejecutando rollback:", dbError)
+      await rollbackUploadedFiles(uploadedFiles)
+      throw dbError
+    }
   } catch (error) {
     console.error("Error saving billing settings:", error)
+    
+    if (error instanceof HttpError) {
+      return NextResponse.json(
+        { success: false, error: `Error del servidor: ${error.status}` },
+        { status: error.status }
+      )
+    }
+    
+    if (error instanceof NetworkError) {
+      return NextResponse.json(
+        { success: false, error: "Error de conexión con el servidor" },
+        { status: 503 }
+      )
+    }
+    
     return NextResponse.json(
       { success: false, error: "Error interno del servidor" },
       { status: 500 }
     )
   }
 }
-

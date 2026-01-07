@@ -147,7 +147,7 @@ Si el tipo es **Persona Natural**, mostrar al inicio:
 
 ---
 
-## 🟦 4. Documentos Soporte (Nuevo)
+## 🟦 4. Documentos Soporte
 
 ### Certificación de cuenta (obligatoria)
 
@@ -163,6 +163,24 @@ Si el tipo es **Persona Natural**, mostrar al inicio:
 
 * Bancos tradicionales
 * Billeteras digitales de bajo monto
+
+### ⚠️ Comportamiento de carga de documentos (Importante)
+
+Los documentos **NO se suben inmediatamente** al seleccionarlos. El flujo es:
+
+1. Usuario selecciona archivo → se almacena en memoria (preview visible)
+2. Usuario completa todo el formulario
+3. Usuario hace clic en "Guardar"
+4. **Todos los documentos se envían junto con el formulario**
+5. El servidor sube los documentos y guarda los datos de forma atómica
+
+**Si falla la subida de algún documento:**
+* Se eliminan los documentos ya subidos (rollback)
+* No se guarda ningún dato en la base de datos
+* Se muestra error al usuario
+* El usuario puede reintentar
+
+👉 Esto garantiza consistencia: o se guarda todo, o no se guarda nada.
 
 ---
 
@@ -197,14 +215,17 @@ Si el tipo es **Persona Natural**, mostrar al inicio:
 * Certificación bancaria obligatoria
 * Campos precargados editables
 * Mensajes claros de estado
+* **Validación de documentos antes de enviar** (formato, tamaño)
 
-### Backend
+### Backend (BFF)
 
+* Subida atómica de documentos con rollback
 * No liberar pagos si:
 
   * `bank_account.status !== verified`
 * Historial de cambios de cuenta
 * Validación manual o automática futura
+* Error `DOCUMENT_UPLOAD_FAILED` si falla subida
 
 ---
 

@@ -20,7 +20,12 @@ import {
 interface BankInfoFormProps {
   value: Partial<BankInfo>
   onChange: (value: Partial<BankInfo>) => void
-  onFileChange: (fileName: string | undefined) => void
+  /**
+   * Callback cuando se selecciona o elimina la certificación bancaria.
+   * Recibe el objeto File o undefined si se elimina.
+   * El archivo se enviará junto con el formulario al guardar.
+   */
+  onFileChange: (file: File | undefined) => void
   errors?: Partial<Record<keyof BankInfo, string>>
   disabled?: boolean
 }
@@ -33,7 +38,10 @@ interface BankInfoFormProps {
  * - Banco o proveedor
  * - Tipo de cuenta
  * - Número de cuenta
- * - Certificación bancaria (RN-05)
+ * - Certificación bancaria (RN-07)
+ * 
+ * NOTA: El documento NO se sube inmediatamente. Se almacena en memoria
+ * y se envía junto con el formulario al guardar (RN-22).
  */
 export function BankInfoForm({
   value,
@@ -133,12 +141,15 @@ export function BankInfoForm({
           </Label>
           <Input
             id="accountNumber"
-            placeholder={isWallet ? "Ej: 3001234567" : "Ingresa el número de cuenta"}
+            placeholder={isWallet ? "Ej: 3001234567" : "Ingresa el número de cuenta (6-20 dígitos)"}
             value={value.accountNumber || ""}
             onChange={(e) => updateField("accountNumber", e.target.value)}
             disabled={disabled}
             aria-invalid={!!errors.accountNumber}
           />
+          <p className="text-xs text-muted-foreground">
+            El número de cuenta debe tener entre 6 y 20 dígitos
+          </p>
           {errors.accountNumber && (
             <p className="text-sm text-destructive">{errors.accountNumber}</p>
           )}
@@ -153,10 +164,12 @@ export function BankInfoForm({
           <DocumentUpload
             label={isWallet ? "Comprobante de billetera digital" : "Certificación bancaria"}
             accept={ALLOWED_FILE_FORMATS.bankCertificate.map((f) => `.${f}`).join(",")}
+            documentType="bank_certificate"
             currentFile={value.bankCertificateUrl}
-            onFileSelect={onFileChange}
+            onFileChange={onFileChange}
             disabled={disabled}
             hint={`Formatos permitidos: ${ALLOWED_FILE_FORMATS.bankCertificate.join(", ").toUpperCase()}`}
+            hasError={!!errors.bankCertificateUrl}
           />
           {errors.bankCertificateUrl && (
             <p className="text-sm text-destructive">{errors.bankCertificateUrl}</p>
@@ -166,4 +179,3 @@ export function BankInfoForm({
     </div>
   )
 }
-
