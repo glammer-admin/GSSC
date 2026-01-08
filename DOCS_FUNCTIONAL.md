@@ -9,11 +9,12 @@
 5. [Selección de Rol](#selección-de-rol)
 6. [Roles y Permisos](#roles-y-permisos)
 7. [Dashboard del Organizador](#dashboard-del-organizador)
-8. [Configuración de Facturación y Pagos](#configuración-de-facturación-y-pagos)
-9. [Sistema de Errores](#sistema-de-errores)
-10. [Navegación](#navegación)
-11. [Cerrar Sesión](#cerrar-sesión)
-12. [Preguntas Frecuentes](#preguntas-frecuentes)
+8. [Gestión de Proyectos](#gestión-de-proyectos)
+9. [Configuración de Facturación y Pagos](#configuración-de-facturación-y-pagos)
+10. [Sistema de Errores](#sistema-de-errores)
+11. [Navegación](#navegación)
+12. [Cerrar Sesión](#cerrar-sesión)
+13. [Preguntas Frecuentes](#preguntas-frecuentes)
 
 ---
 
@@ -332,6 +333,129 @@ stateDiagram-v2
 
 ---
 
+## Gestión de Proyectos
+
+### Propósito
+
+El módulo de Gestión de Proyectos permite a los Organizadores crear y configurar proyectos que agrupan productos (uniformes, accesorios, souvenirs) para su venta a través de la plataforma Glam Urban.
+
+Un proyecto es la unidad principal de negocio donde el organizador define la configuración económica, logística y de entrega de los productos que pondrá a la venta.
+
+### Acceso al Módulo
+
+**Ubicación:** 
+- Crear proyecto: Dashboard → Botón "Crear nuevo proyecto" (`/project/new`)
+- Editar proyecto: Dashboard → Seleccionar proyecto → Editar (`/project/{id}/edit`)
+
+### Crear un Nuevo Proyecto
+
+#### Información Básica
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| **Nombre del proyecto** | Sí | Nombre único en toda la plataforma. Solo letras, números y espacios. Máximo 100 caracteres. **No se puede modificar después de la creación.** |
+| **Tipo de proyecto** | Sí | Categoría del proyecto: Equipo, Institución, Empresa, Grupo u Otro |
+| **Descripción corta** | No | Texto informativo para la tienda pública. Máximo 500 caracteres |
+| **Logo del proyecto** | No | Imagen PNG, JPG o WebP. Máximo 2MB. Si excede el tamaño, se comprime automáticamente. Si no se carga, se asigna un avatar por defecto |
+
+#### Configuración Económica
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| **Comisión del organizador** | Sí | Porcentaje de ganancia sobre cada venta (0-100%). Debe ser un número entero. Aplica a todos los productos del proyecto |
+
+**Importante:** Al modificar la comisión en un proyecto con productos, el sistema muestra una advertencia indicando que el cambio afectará el precio de todos los productos.
+
+#### Packaging Personalizado
+
+| Opción | Descripción |
+|--------|-------------|
+| **Sí** | Los productos se empaquetan con branding del proyecto. Afecta el costo y precio publicado |
+| **No** | Empaquetado estándar |
+
+**Nota:** El cambio de packaging solo aplica a nuevos productos. Los productos existentes mantienen su configuración actual.
+
+#### Modos de Entrega
+
+El proyecto debe tener **al menos un modo de entrega activo** para poder activarse. Puedes habilitar uno o varios de los siguientes:
+
+**1. Entrega en sede del organizador**
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| Dirección de entrega | Sí (si habilitado) | Ubicación donde se entregarán los productos |
+| Periodicidad | Sí (si habilitado) | Frecuencia de entrega: Semanal, Quincenal, Mensual o Lo más pronto posible |
+
+**2. Entrega a domicilio del comprador**
+
+| Opción | Descripción |
+|--------|-------------|
+| Se cobra el domicilio al cliente | El costo del envío se calcula según la ubicación del comprador |
+| Entrega gratis | El costo está incluido en el precio del producto. Reduce la ganancia del organizador |
+
+**3. Recolección en Glam Urban**
+
+Sin costo adicional. El organizador recoge los productos directamente en las instalaciones de Glam Urban.
+
+#### Estado del Proyecto
+
+Al crear un proyecto, puedes seleccionar el estado inicial:
+
+| Estado | Descripción |
+|--------|-------------|
+| **Borrador** | Estado por defecto. El proyecto no es visible públicamente. Permite configurar sin publicar |
+| **Activo** | El proyecto es visible en la tienda pública y acepta pedidos. Requiere que toda la información obligatoria esté completa |
+
+### Estados y Transiciones
+
+Los proyectos pueden estar en uno de los siguientes estados:
+
+| Estado | Descripción | Acciones disponibles |
+|--------|-------------|---------------------|
+| **Borrador** | Proyecto en configuración, no visible públicamente | Activar |
+| **Activo** | Proyecto visible en tienda pública, acepta pedidos | Pausar, Finalizar |
+| **Pausado** | Proyecto no acepta nuevos pedidos, procesa los existentes | Reactivar, Finalizar |
+| **Finalizado** | Proyecto cerrado permanentemente | Ninguna (estado terminal) |
+
+**Reglas de transición:**
+- Un proyecto en **Borrador** solo puede pasar a **Activo** (si cumple todos los requisitos)
+- Un proyecto **Activo** puede **Pausarse** o **Finalizarse**
+- Un proyecto **Pausado** puede **Reactivarse** o **Finalizarse**
+- Un proyecto **Finalizado** no puede volver a activarse
+
+**Pausar un proyecto con pedidos activos:**
+Al pausar un proyecto que tiene pedidos en curso, el sistema muestra una advertencia. Los pedidos existentes continuarán su proceso normal de entrega, pero no se aceptarán nuevos pedidos.
+
+### Editar un Proyecto
+
+Al editar un proyecto existente:
+
+- El **nombre del proyecto** no puede modificarse (aparece bloqueado)
+- Los cambios en **comisión**, **packaging** o **modos de entrega** muestran advertencias sobre el impacto en productos y pedidos
+- Los pedidos existentes **nunca** se ven afectados por los cambios de configuración
+
+### Cancelar Creación o Edición
+
+- Si hay cambios sin guardar, el sistema solicita confirmación antes de salir
+- Si no hay cambios, se redirige directamente al dashboard
+
+### Validaciones
+
+El sistema valida automáticamente:
+
+| Validación | Mensaje de error |
+|------------|------------------|
+| Nombre vacío | "El nombre del proyecto es obligatorio" |
+| Nombre con caracteres especiales | "El nombre solo puede contener letras, números y espacios" |
+| Nombre mayor a 100 caracteres | "El nombre no puede exceder 100 caracteres" |
+| Nombre duplicado | "El nombre del proyecto ya existe" |
+| Comisión no entero | "La comisión debe ser un número entero" |
+| Comisión fuera de rango | "La comisión debe ser un valor entre 0 y 100" |
+| Activar sin modo de entrega | "Debe seleccionar al menos un modo de entrega para activar el proyecto" |
+| Activar sin comisión | "Debe definir la comisión para activar el proyecto" |
+
+---
+
 ## Configuración de Facturación y Pagos
 
 ### Propósito
@@ -622,4 +746,4 @@ Para asistencia adicional:
 ---
 
 _Última actualización: Diciembre 2024_
-_Versión: 2.0_
+_Versión: 2.1_

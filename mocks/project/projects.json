@@ -1,0 +1,153 @@
+{
+  "projects": [
+    {
+      "id": "proj-001",
+      "organizerId": "org-123",
+      "name": "Uniformes Colegio San José",
+      "projectType": "institution",
+      "description": "Uniformes escolares para el año lectivo 2025",
+      "logoUrl": "/placeholder-logo.png",
+      "commission": 15,
+      "customPackaging": true,
+      "deliveryModes": {
+        "venue": {
+          "enabled": true,
+          "address": "Calle 100 #15-20, Bogotá",
+          "periodicity": "weekly"
+        },
+        "home": {
+          "enabled": true,
+          "costType": "charged"
+        },
+        "pickup": {
+          "enabled": false
+        }
+      },
+      "status": "active",
+      "hasProducts": true,
+      "hasActiveOrders": true,
+      "createdAt": "2024-08-15T10:30:00Z",
+      "updatedAt": "2024-12-01T14:20:00Z"
+    },
+    {
+      "id": "proj-002",
+      "organizerId": "org-123",
+      "name": "Equipo Fútbol Los Tigres",
+      "projectType": "team",
+      "description": "Uniformes y accesorios del equipo de fútbol",
+      "logoUrl": "/placeholder-logo.png",
+      "commission": 20,
+      "customPackaging": false,
+      "deliveryModes": {
+        "venue": {
+          "enabled": true,
+          "address": "Estadio Municipal, Carrera 50 #30-10",
+          "periodicity": "biweekly"
+        },
+        "home": {
+          "enabled": false
+        },
+        "pickup": {
+          "enabled": true
+        }
+      },
+      "status": "active",
+      "hasProducts": true,
+      "hasActiveOrders": false,
+      "createdAt": "2024-09-20T08:00:00Z",
+      "updatedAt": "2024-11-15T16:45:00Z"
+    },
+    {
+      "id": "proj-003",
+      "organizerId": "org-123",
+      "name": "Empresa Tech Solutions",
+      "projectType": "company",
+      "description": "Merchandising corporativo",
+      "commission": 10,
+      "customPackaging": true,
+      "deliveryModes": {
+        "venue": {
+          "enabled": false
+        },
+        "home": {
+          "enabled": true,
+          "costType": "free"
+        },
+        "pickup": {
+          "enabled": true
+        }
+      },
+      "status": "draft",
+      "hasProducts": false,
+      "hasActiveOrders": false,
+      "createdAt": "2024-12-10T11:00:00Z",
+      "updatedAt": "2024-12-10T11:00:00Z"
+    },
+    {
+      "id": "proj-004",
+      "organizerId": "org-123",
+      "name": "Club de Natación Delfines",
+      "projectType": "team",
+      "description": "Trajes de baño y accesorios para el club",
+      "logoUrl": "/placeholder-logo.png",
+      "commission": 18,
+      "customPackaging": false,
+      "deliveryModes": {
+        "venue": {
+          "enabled": true,
+          "address": "Piscina Olímpica, Av. 68 #45-30",
+          "periodicity": "monthly"
+        },
+        "home": {
+          "enabled": false
+        },
+        "pickup": {
+          "enabled": false
+        }
+      },
+      "status": "paused",
+      "hasProducts": true,
+      "hasActiveOrders": true,
+      "createdAt": "2024-06-01T09:15:00Z",
+      "updatedAt": "2024-10-20T12:30:00Z"
+    },
+    {
+      "id": "proj-005",
+      "organizerId": "org-123",
+      "name": "Grupo Scout Aventureros",
+      "projectType": "group",
+      "description": "Uniformes y equipamiento scout",
+      "logoUrl": "/placeholder-logo.png",
+      "commission": 12,
+      "customPackaging": false,
+      "deliveryModes": {
+        "venue": {
+          "enabled": true,
+          "address": "Parque Nacional, Punto de encuentro",
+          "periodicity": "asap"
+        },
+        "home": {
+          "enabled": true,
+          "costType": "charged"
+        },
+        "pickup": {
+          "enabled": true
+        }
+      },
+      "status": "finished",
+      "hasProducts": true,
+      "hasActiveOrders": false,
+      "createdAt": "2024-01-10T07:00:00Z",
+      "updatedAt": "2024-05-30T18:00:00Z"
+    }
+  ],
+  "existingNames": [
+    "Uniformes Colegio San José",
+    "Equipo Fútbol Los Tigres",
+    "Empresa Tech Solutions",
+    "Club de Natación Delfines",
+    "Grupo Scout Aventureros",
+    "Proyecto Existente"
+  ]
+}
+
