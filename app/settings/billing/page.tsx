@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
-import { getSession, isCompleteSession, type SessionData } from "@/lib/auth/session-manager"
+import { getSession, isCompleteSession } from "@/lib/auth/session-manager"
 import { getBillingClient } from "@/lib/http/billing"
-import { toBillingSettings } from "@/lib/types/billing/types"
+import { toBillingSettings, type BankAccount } from "@/lib/types/billing/types"
 import { BillingForm } from "@/components/settings/billing/billing-form"
 import { EligibilityStatus } from "@/components/settings/billing/eligibility-status"
 
@@ -11,8 +11,9 @@ import { EligibilityStatus } from "@/components/settings/billing/eligibility-sta
  * Server Component que:
  * 1. Valida sesión y rol organizer
  * 2. Carga datos de facturación desde el backend real
- * 3. Extrae user-data de la sesión para autocompletado
- * 4. Pasa datos al formulario Client Component
+ * 3. Carga lista de cuentas bancarias (v2.2)
+ * 4. Extrae user-data de la sesión para autocompletado
+ * 5. Pasa datos al formulario Client Component
  */
 export default async function BillingPage() {
   // SSR: Validar sesión en el servidor
@@ -37,12 +38,15 @@ export default async function BillingPage() {
 
   // Cargar datos de facturación desde el backend real
   let billingSettings = null
+  let bankAccounts: BankAccount[] = []
   let loadError = null
 
   try {
     const billingClient = getBillingClient()
     const billingData = await billingClient.getBillingData(organizerId)
     billingSettings = toBillingSettings(billingData, organizerId)
+    // v2.2: Pasar lista de cuentas bancarias al formulario
+    bankAccounts = billingData.accounts || []
   } catch (error) {
     console.error("Error loading billing data:", error)
     loadError = "No se pudieron cargar los datos de facturación. Intenta nuevamente."
@@ -84,6 +88,7 @@ export default async function BillingPage() {
       <BillingForm
         organizerId={organizerId}
         initialSettings={billingSettings}
+        initialAccounts={bankAccounts}
         userData={userData}
       />
     </div>

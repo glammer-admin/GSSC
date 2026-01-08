@@ -3,7 +3,7 @@ import { getSession, isCompleteSession } from "@/lib/auth/session-manager"
 import { getBillingClient, HttpError, NetworkError } from "@/lib/http/billing"
 import type { BankAccount } from "@/lib/types/billing/types"
 
-interface ActivateAccountResponse {
+interface DeactivateAccountResponse {
   success: boolean
   data?: BankAccount
   error?: string
@@ -15,16 +15,18 @@ interface RouteParams {
 }
 
 /**
- * POST /api/settings/billing/accounts/[id]/activate
+ * POST /api/settings/billing/accounts/[id]/deactivate
  * 
- * Reactiva una cuenta bancaria inactiva.
- * NOTA: Activar una cuenta NO desactiva las demás. Puede haber múltiples cuentas activas.
- * Solo is_preferred tiene restricción de una única cuenta por usuario.
+ * Inactiva una cuenta bancaria.
+ * 
+ * Restricciones:
+ * - No se puede inactivar una cuenta que está marcada como preferida (is_preferred=true)
+ * - Error: CANNOT_INACTIVATE_PREFERRED
  */
 export async function POST(
   _request: NextRequest,
   { params }: RouteParams
-): Promise<NextResponse<ActivateAccountResponse>> {
+): Promise<NextResponse<DeactivateAccountResponse>> {
   try {
     const { id } = await params
     
@@ -66,25 +68,37 @@ export async function POST(
       )
     }
 
-    // Si ya está activa, no hacer nada
-    if (existingAccount.is_active) {
+    // Si ya está inactiva, no hacer nada
+    if (!existingAccount.is_active) {
       return NextResponse.json({
         success: true,
         data: existingAccount,
-        message: "La cuenta ya está activa",
+        message: "La cuenta ya está inactiva",
       })
     }
 
-    // Activar la cuenta (NO afecta otras cuentas - pueden haber múltiples activas)
-    const account = await billingClient.activateBankAccount(id)
+    // RN-16: No se puede inactivar una cuenta que está marcada como preferida
+    if (existingAccount.is_preferred) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "CANNOT_INACTIVATE_PREFERRED",
+          message: "No puede inactivar la cuenta preferida. Seleccione otra primero" 
+        },
+        { status: 400 }
+      )
+    }
+
+    // Inactivar la cuenta
+    const account = await billingClient.deactivateBankAccount(id)
 
     return NextResponse.json({
       success: true,
       data: account,
-      message: "Cuenta bancaria activada exitosamente",
+      message: "Cuenta bancaria inactivada exitosamente",
     })
   } catch (error) {
-    console.error("Error activating bank account:", error)
+    console.error("Error deactivating bank account:", error)
     
     if (error instanceof HttpError) {
       return NextResponse.json(

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Loader2, Save } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -15,8 +16,7 @@ import { EntityTypeSelector } from "./entity-type-selector"
 import { LegalInfoNatural } from "./legal-info-natural"
 import { LegalInfoLegal } from "./legal-info-legal"
 import { ContactInfoForm } from "./contact-info"
-import { BankInfoForm } from "./bank-info"
-import { VerificationStatusDisplay } from "./verification-status"
+import { BankSection } from "./bank-section"
 import type {
   BillingSettings,
   BillingSettingsInput,
@@ -25,11 +25,14 @@ import type {
   LegalEntityLegalInfo,
   ContactInfo,
   BankInfo,
+  BankAccount,
 } from "@/lib/types/billing/types"
 
 interface BillingFormProps {
   organizerId: string
   initialSettings: BillingSettings | null
+  /** Lista de cuentas bancarias del usuario (v2.2) */
+  initialAccounts?: BankAccount[]
   userData?: {
     name?: string
     email?: string
@@ -64,8 +67,11 @@ interface FormErrors {
 export function BillingForm({
   organizerId,
   initialSettings,
+  initialAccounts = [],
   userData,
 }: BillingFormProps) {
+  const router = useRouter()
+  
   // Estado del formulario
   const [entityType, setEntityType] = useState<EntityType | null>(
     initialSettings?.entityType || null
@@ -73,21 +79,45 @@ export function BillingForm({
   const [entityTypeLocked, setEntityTypeLocked] = useState(
     initialSettings?.entityTypeLocked || false
   )
+  
+  // RN-26: Autocompletado automático de nombre si no hay perfil previo
   const [naturalPersonInfo, setNaturalPersonInfo] = useState<Partial<NaturalPersonLegalInfo>>(
-    initialSettings?.naturalPersonInfo || {}
+    initialSettings?.naturalPersonInfo || 
+    // Si no hay perfil previo y hay userData, precargar nombre
+    (!initialSettings && userData?.name ? { fullName: userData.name } : {})
   )
   const [legalEntityInfo, setLegalEntityInfo] = useState<Partial<LegalEntityLegalInfo>>(
     initialSettings?.legalEntityInfo || {}
   )
-  const [contactInfo, setContactInfo] = useState<Partial<ContactInfo>>(
-    initialSettings?.contactInfo || {}
-  )
+  
+  // RN-26, RN-27: Autocompletado automático de contactInfo
+  // Si no hay perfil previo (initialSettings === null), usar datos de userData
+  // Si hay perfil previo, usar datos del servicio
+  const [contactInfo, setContactInfo] = useState<Partial<ContactInfo>>(() => {
+    if (initialSettings?.contactInfo) {
+      // RN-27: Ya existe perfil, usar datos del servicio
+      return initialSettings.contactInfo
+    }
+    // RN-26: No existe perfil, autocompletar desde userData si está disponible
+    if (userData) {
+      return {
+        email: userData.email || "",
+        phone: userData.phone || "",
+        address: userData.address || "",
+      }
+    }
+    return {}
+  })
+  
   const [bankInfo, setBankInfo] = useState<Partial<BankInfo>>(
     initialSettings?.bankInfo || {}
   )
   const [verificationStatus, setVerificationStatus] = useState(
     initialSettings?.verificationStatus || null
   )
+  
+  // Estado de cuentas bancarias (v2.2)
+  const [accounts, setAccounts] = useState<BankAccount[]>(initialAccounts)
 
   // Estado de archivos (File objects en memoria)
   const [idDocumentFile, setIdDocumentFile] = useState<File | undefined>(undefined)
@@ -99,31 +129,9 @@ export function BillingForm({
   const existingRutDocumentUrl = initialSettings?.legalEntityInfo?.rutDocumentUrl
   const existingBankCertificateUrl = initialSettings?.bankInfo?.bankCertificateUrl
 
-  // Estado de autocompletado
-  const [useProfileData, setUseProfileData] = useState(false)
-
   // Estado de UI
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
-
-  // Manejar autocompletado de datos del perfil
-  const handleUseProfileData = useCallback((use: boolean) => {
-    setUseProfileData(use)
-    if (use && userData) {
-      setContactInfo({
-        email: userData.email || "",
-        phone: userData.phone || "",
-        address: userData.address || "",
-      })
-      // También precargar nombre en info legal si es persona natural
-      if (entityType === "natural" && userData.name) {
-        setNaturalPersonInfo((prev) => ({
-          ...prev,
-          fullName: userData.name,
-        }))
-      }
-    }
-  }, [userData, entityType])
 
   // Verificar si hay un documento disponible (nuevo o existente)
   const hasIdDocument = !!idDocumentFile || !!existingIdDocumentUrl
@@ -213,12 +221,8 @@ export function BillingForm({
       newErrors.contactInfo = contactErrors
     }
 
-    // Validar información bancaria
+    // Validar información bancaria (v2.2 - sin accountHolder)
     const bankErrors: Partial<Record<keyof BankInfo, string>> = {}
-    if (!bankInfo.accountHolder?.trim()) {
-      bankErrors.accountHolder = "El titular de la cuenta es obligatorio"
-      isValid = false
-    }
     if (!bankInfo.bankOrProvider) {
       bankErrors.bankOrProvider = "El banco o proveedor es obligatorio"
       isValid = false
@@ -309,18 +313,9 @@ export function BillingForm({
         throw new Error(result.message || result.error || "Error al guardar la configuración")
       }
 
-      // Actualizar estado con la respuesta
-      if (result.data) {
-        setEntityTypeLocked(result.data.entityTypeLocked)
-        setVerificationStatus(result.data.verificationStatus)
-        
-        // Limpiar archivos en memoria (ya están guardados)
-        setIdDocumentFile(undefined)
-        setRutDocumentFile(undefined)
-        setBankCertificateFile(undefined)
-      }
-
+      // RN-38: Mostrar mensaje de éxito y redirigir al dashboard
       toast.success("Configuración guardada exitosamente")
+      router.push("/dashboard")
     } catch (error) {
       console.error("Error saving billing settings:", error)
       toast.error(
@@ -328,9 +323,9 @@ export function BillingForm({
           ? error.message
           : "Error al guardar la configuración"
       )
-    } finally {
       setIsSubmitting(false)
     }
+    // No llamamos setIsSubmitting(false) en éxito porque vamos a redirigir
   }
 
   // Handlers para archivos que actualizan el estado con File objects
@@ -417,37 +412,33 @@ export function BillingForm({
               onChange={setContactInfo}
               errors={errors.contactInfo}
               disabled={isSubmitting}
-              userData={userData}
-              onUseProfileData={handleUseProfileData}
-              useProfileData={useProfileData}
-              showAutoComplete={entityType === "natural"}
             />
           </CardContent>
         </Card>
       )}
 
-      {/* Información Bancaria */}
+      {/* Información Bancaria (v2.2 - con lista de cuentas) */}
       {entityType && (
         <Card>
           <CardHeader>
             <CardTitle>Información Bancaria</CardTitle>
             <CardDescription>
-              Cuenta donde recibirás los pagos de tus ventas
+              {accounts.length > 0 
+                ? "Gestiona tus cuentas bancarias para recibir pagos"
+                : "Configura tu cuenta bancaria para recibir pagos"}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <BankInfoForm
-              value={bankInfo}
-              onChange={setBankInfo}
+          <CardContent>
+            <BankSection
+              accounts={accounts}
+              bankInfo={bankInfo}
+              onBankInfoChange={setBankInfo}
               onFileChange={handleBankCertificateChange}
+              onAccountsChange={setAccounts}
               errors={errors.bankInfo}
               disabled={isSubmitting}
+              verificationStatus={verificationStatus}
             />
-
-            {/* Estado de verificación */}
-            {verificationStatus && (
-              <VerificationStatusDisplay status={verificationStatus} />
-            )}
           </CardContent>
         </Card>
       )}

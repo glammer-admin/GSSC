@@ -307,8 +307,8 @@ export async function POST(
         { status: 400 }
       )
     }
-    const { accountHolder, bankOrProvider, accountType, accountNumber } = input.bankInfo
-    if (!accountHolder || !bankOrProvider || !accountType || !accountNumber) {
+    const { bankOrProvider, accountType, accountNumber } = input.bankInfo
+    if (!bankOrProvider || !accountType || !accountNumber) {
       return NextResponse.json(
         { success: false, error: "Todos los campos bancarios son obligatorios" },
         { status: 400 }
@@ -480,28 +480,18 @@ export async function POST(
         savedProfile = await billingClient.createBillingProfile(createData)
       }
 
-      // Manejar cuenta bancaria
-      const existingAccounts = await billingClient.getBankAccounts(userId)
-      const activeAccount = existingAccounts.find(a => a.is_active)
-
-      if (activeAccount) {
-        // Actualizar cuenta activa existente
-        await billingClient.updateBankAccount(activeAccount.id, {
-          holder_name: accountHolder,
-          bank_name: bankOrProvider,
-          account_type: accountType,
-          account_number: accountNumber,
-        })
-      } else {
-        // Crear nueva cuenta bancaria
-        await billingClient.createBankAccount({
-          user_id: userId,
-          holder_name: accountHolder,
-          bank_name: bankOrProvider,
-          account_type: accountType,
-          account_number: accountNumber,
-        })
-      }
+      // RN-14 (v2.4): Siempre crear nueva cuenta bancaria
+      // Todas las cuentas se crean activas por defecto
+      // RN-13 (v2.4): Las cuentas NUNCA se marcan como preferidas automáticamente
+      // El usuario debe seleccionar manualmente la cuenta preferida después de verificación
+      await billingClient.createBankAccount({
+        user_id: userId,
+        bank_name: bankOrProvider,
+        account_type: accountType,
+        account_number: accountNumber,
+        is_active: true,
+        is_preferred: false,
+      })
 
       // Crear referencias de documentos en BD
       for (const uploadedFile of uploadedFiles) {

@@ -12,12 +12,35 @@
 - Documento técnico principal: `DOCS_TECHNICAL.md`
 - Especificación funcional: `specs/settings/provider/billing/spec.md`
 - Descripción funcional: `specs/settings/provider/billing/dec-funcional.md`
-- Ejemplos cURL backend: `specs/register/global-setting-curl.md`
+- Ejemplos cURL backend: `specs/settings/provider/billing/global-setting-curl.md`
 
 ### 1.2 Objetivo del plan
 Actualizar el módulo de **Configuración de Facturación y Pagos** para integrar con el backend real de Supabase, reemplazando los mocks actuales. El módulo permite a los Organizers registrar su información legal, de contacto y bancaria para poder recibir pagos.
 
 **Cambio importante (v2.1):** Los documentos ahora se envían junto con el formulario al finalizar (no inmediatamente al seleccionarlos). El BFF procesa todo atómicamente con rollback en caso de error.
+
+**Cambio importante (v2.2):** Nuevo modelo de cuentas bancarias:
+- `is_active`: Indica si la cuenta está habilitada (puede tener múltiples activas)
+- `is_preferred`: Indica la cuenta seleccionada para recibir pagos (solo una, requiere verified + active)
+- Eliminado campo `holder_name` de cuentas bancarias
+- Lista de cuentas con radio buttons para selección de preferida
+- No se pueden eliminar cuentas, solo inactivar
+- No se puede inactivar la cuenta preferida
+
+**Cambio importante (v2.3):** Ajuste en creación de cuentas bancarias:
+- Todas las cuentas se crean con `is_active: true` por defecto
+- ~~La primera cuenta del usuario se marca como `is_preferred: true` inmediatamente (sin esperar verificación)~~ **OBSOLETO**
+
+**Cambio importante (v2.4):** Las cuentas ya NO se marcan como preferidas automáticamente:
+- Las cuentas se crean con `is_active: true` pero `is_preferred: false`
+- El usuario debe seleccionar manualmente la cuenta preferida después de que sea verificada
+- Ni siquiera la primera cuenta se marca como preferida automáticamente
+
+**Cambio importante (v2.5/v2.6):** Simplificación de UX:
+- Después de guardar la configuración exitosamente, se redirige al dashboard (`/dashboard`)
+- Autocompletado automático sin opción manual: si no existe perfil de facturación, se autocompletan datos desde perfil de registro en la inicialización del estado
+- Si ya existe perfil de facturación guardado, se cargan los datos del servicio
+- Eliminada la opción "Usar los mismos datos de mi perfil de registro"
 
 ---
 
@@ -69,7 +92,7 @@ Actualizar el módulo de **Configuración de Facturación y Pagos** para integra
 |----------|-----------|
 | ¿Qué problema de negocio se resuelve? | Permitir a Organizers configurar datos fiscales y bancarios para recibir pagos de sus ventas |
 | ¿Quiénes son los actores involucrados? | Organizer (usuario con rol `organizer`) |
-| ¿Cuáles son las reglas de negocio críticas? | RN-01 a RN-23 definidas en spec.md (tipo entidad inmutable, documentos obligatorios, múltiples cuentas con una activa, validaciones de formato, documentos enviados al finalizar formulario, guardado atómico con rollback) |
+| ¿Cuáles son las reglas de negocio críticas? | RN-01 a RN-38 definidas en spec.md (tipo entidad inmutable, documentos obligatorios, múltiples cuentas con una preferida, is_active + is_preferred, cuentas se crean activas por defecto, cuentas NUNCA se marcan preferidas automáticamente, no eliminar cuentas, no inactivar preferida, validaciones de formato, documentos enviados al finalizar formulario, guardado atómico con rollback, redirección al dashboard después de guardar, autocompletado automático sin opción manual) |
 | ¿Qué decisiones ya están tomadas? | Modelo de 3 tablas (billing_profiles, bank_accounts, billing_documents), bucket `billing-documents`, RPC de elegibilidad |
 | ¿Qué partes son configurables vs fijas? | Fijo: estructura de formulario, campos obligatorios, validaciones. Configurable: datos precargados desde user-data |
 | ¿Qué escenarios de error deben contemplarse? | Validación de campos, formatos de archivo, tipo de entidad bloqueado, errores de red, errores del backend, fallo en subida de documentos (DOCUMENT_UPLOAD_FAILED con rollback) |
@@ -85,7 +108,7 @@ Actualizar el módulo de **Configuración de Facturación y Pagos** para integra
 - Modificar `lib/types/billing/types.ts` con:
   - Tipos que mapean a las 3 tablas del backend
   - `BillingProfile` (billing_profiles)
-  - `BankAccount` (bank_accounts)
+  - `BankAccount` (bank_accounts) - **SIN `holder_name`, CON `is_preferred`**
   - `BillingDocument` (billing_documents)
   - DTOs para crear/actualizar
   - Tipos de respuesta del backend
@@ -97,10 +120,13 @@ Actualizar el módulo de **Configuración de Facturación y Pagos** para integra
   - `createBillingProfile(data)`
   - `updateBillingProfile(userId, data)`
   - `getBankAccounts(userId)`
-  - `getActiveBankAccount(userId)`
+  - `getPreferredBankAccount(userId)` - Obtener cuenta preferida
+  - `getActiveBankAccounts(userId)` - Obtener cuentas activas
   - `createBankAccount(data)`
   - `updateBankAccount(id, data)`
-  - `activateBankAccount(id)`
+  - `setPreferredBankAccount(id)` - Marcar como preferida (requiere active + verified)
+  - `activateBankAccount(id)` - Reactivar cuenta inactiva
+  - `deactivateBankAccount(id)` - Inactivar cuenta (no permitido si es preferida)
   - `getBillingDocuments(userId)`
   - `createBillingDocument(data)`
   - `checkPaymentEligibility(userId)`
@@ -141,21 +167,31 @@ Actualizar el módulo de **Configuración de Facturación y Pagos** para integra
 - Crear `app/api/settings/billing/accounts/[id]/route.ts`:
   - GET: Obtener cuenta por ID
   - PATCH: Actualizar cuenta
-  - DELETE: Eliminar cuenta (si no está activa)
+  - **NO DELETE**: Las cuentas no se pueden eliminar, solo inactivar
 
-#### 2.4 Crear endpoint para activar cuenta
+#### 2.4 Crear endpoint para activar/inactivar cuenta
 - Crear `app/api/settings/billing/accounts/[id]/activate/route.ts`:
-  - POST: Activar cuenta específica
+  - POST: Activar/reactivar cuenta específica (`is_active: true`)
+- Crear `app/api/settings/billing/accounts/[id]/deactivate/route.ts`:
+  - POST: Inactivar cuenta (`is_active: false`)
+  - **Validación**: No permitir si la cuenta es preferida
 
-#### 2.5 Actualizar endpoint para documentos
+#### 2.5 Crear endpoint para marcar cuenta como preferida
+- Crear `app/api/settings/billing/accounts/[id]/preferred/route.ts`:
+  - POST: Marcar cuenta como preferida (`is_preferred: true`)
+  - **Validaciones**: 
+    - Requiere `is_active: true` AND `status: verified`
+    - Desmarca automáticamente la cuenta preferida anterior
+
+#### 2.6 Actualizar endpoint para documentos
 - Modificar `app/api/settings/billing/documents/route.ts`:
   - GET: Listar documentos (mantener)
   - POST: **DEPRECADO** - La subida ahora se hace en el endpoint principal `/api/settings/billing`
   - Mantener el endpoint para compatibilidad pero documentar que está deprecado
 
-#### 2.6 Crear endpoint de elegibilidad
+#### 2.7 Crear endpoint de elegibilidad
 - Crear `app/api/settings/billing/eligibility/route.ts`:
-  - GET: Verificar elegibilidad de pagos
+  - GET: Verificar elegibilidad de pagos (basado en cuenta preferida verificada)
 
 ### Fase 3 – Actualización de Componentes UI
 
@@ -164,6 +200,15 @@ Actualizar el módulo de **Configuración de Facturación y Pagos** para integra
   - Adaptar a nuevo modelo de datos
   - Separar secciones: Perfil, Cuentas, Documentos
   - Manejar múltiples cuentas bancarias
+  - **Autocompletado automático (RN-26, RN-27, RN-28):**
+    - En la inicialización del estado de `contactInfo`, si `initialSettings === null` y hay `userData`, usar datos del perfil
+    - Si ya existe `initialSettings`, usar los datos del servicio
+    - Eliminar estado `useProfileData` y handler `handleUseProfileData`
+    - Eliminar props de autocompletado manual de `ContactInfoForm`
+  - **Redirección después de guardar (RN-38):**
+    - Usar `useRouter` de `next/navigation`
+    - Después de guardar exitosamente, llamar `router.push('/dashboard')`
+    - Mostrar toast de éxito antes de redirigir
   - **Nuevo flujo de envío:**
     - Recolectar objetos `File` de los componentes `DocumentUpload`
     - Construir `FormData` con:
@@ -175,12 +220,35 @@ Actualizar el módulo de **Configuración de Facturación y Pagos** para integra
     - Mostrar estado de "Guardando..." durante todo el proceso (incluye subida de archivos)
     - Manejar error `DOCUMENT_UPLOAD_FAILED` con mensaje apropiado
 
+#### 3.1.1 Actualizar ContactInfoForm
+- Modificar `components/settings/billing/contact-info.tsx`:
+  - **Eliminar opción manual de autocompletado:**
+    - Eliminar checkbox "Usar los mismos datos de mi perfil de registro"
+    - Eliminar props: `onUseProfileData`, `useProfileData`, `showAutoComplete`, `userData`
+    - Mantener solo los campos de entrada (email, phone, address)
+    - El autocompletado ahora se maneja en el componente padre (BillingForm) en la inicialización
+
 #### 3.2 Actualizar componente de información bancaria
 - Modificar `components/settings/billing/bank-info.tsx`:
-  - Lista de cuentas existentes
-  - Indicador de cuenta activa
-  - Botón para activar cuenta
-  - Formulario para nueva cuenta
+  - **Vista de lista** (cuando hay cuentas):
+    - Lista de todas las cuentas con radio buttons
+    - Radio button habilitado solo si: `is_active = true` AND `status = verified`
+    - Cuentas inactivas en gris/deshabilitadas con botón "Reactivar"
+    - Indicador visual de cuenta preferida actual (badge)
+    - Botón "Confirmar selección" para guardar cambio de preferida
+    - Botón "Agregar cuenta" para mostrar formulario
+    - **Tooltips de ayuda en botones con restricciones:**
+      - Radio deshabilitado (no verificada): "Solo cuentas verificadas pueden ser seleccionadas"
+      - Radio deshabilitado (inactiva): "Cuenta inactiva. Reactívela primero"
+      - Botón Inactivar deshabilitado: "No puede inactivar la cuenta preferida. Seleccione otra primero"
+  - **Vista de formulario** (sin cuentas o agregando):
+    - Se muestra automáticamente si no hay cuentas
+    - Campos: banco/proveedor, tipo de cuenta, número de cuenta
+    - **SIN campo holder_name** (eliminado)
+    - Upload de certificación bancaria
+  - **Acciones por cuenta:**
+    - Botón "Inactivar" (deshabilitado si es preferida, con tooltip)
+    - Botón "Reactivar" (solo para cuentas inactivas)
   - **Pasar objeto `File` al padre** en lugar de subir inmediatamente
 
 #### 3.3 Actualizar componente de documentos (CAMBIO IMPORTANTE)
@@ -241,9 +309,13 @@ app/api/
         ├── accounts/
         │   ├── route.ts                # GET/POST cuentas bancarias
         │   └── [id]/
-        │       ├── route.ts            # GET/PATCH/DELETE cuenta específica
-        │       └── activate/
-        │           └── route.ts        # POST activar cuenta
+        │       ├── route.ts            # GET/PATCH cuenta específica (NO DELETE)
+        │       ├── activate/
+        │       │   └── route.ts        # POST activar/reactivar cuenta
+        │       ├── deactivate/
+        │       │   └── route.ts        # POST inactivar cuenta (validar no preferida)
+        │       └── preferred/
+        │           └── route.ts        # POST marcar como preferida (validar active+verified)
         ├── documents/
         │   └── route.ts                # GET/POST documentos
         └── eligibility/
@@ -252,7 +324,8 @@ app/api/
 components/
 └── settings/
     └── billing/
-        └── eligibility-status.tsx      # Nuevo: estado de elegibilidad
+        ├── eligibility-status.tsx      # Nuevo: estado de elegibilidad
+        └── bank-account-list.tsx       # Nuevo: lista de cuentas con radio buttons
 ```
 
 ### Archivos a modificar
@@ -419,7 +492,9 @@ sequenceDiagram
 | Fallo en subida de archivos | Alto | **Rollback atómico**: si falla un documento, se eliminan los ya subidos y se retorna error `DOCUMENT_UPLOAD_FAILED`. Usuario puede reintentar |
 | Archivos grandes en memoria | Medio | Límite de tamaño (10MB por archivo), validación en cliente antes de enviar |
 | Timeout en subida múltiple | Medio | Aumentar `maxDuration` del endpoint a 60 segundos, subir archivos secuencialmente |
-| Conflicto de activación de cuentas | Medio | Transacción en backend garantiza solo una activa |
+| Conflicto de selección de cuenta preferida | Medio | Transacción en backend garantiza solo una preferida |
+| Usuario intenta inactivar cuenta preferida | Medio | Validación en endpoint retorna error `CANNOT_INACTIVATE_PREFERRED` |
+| Usuario intenta marcar inactiva como preferida | Medio | Validación en endpoint retorna error `CANNOT_SET_PREFERRED_INACTIVE` |
 | Migración de datos mock existentes | Bajo | Los mocks solo tenían datos de prueba, no hay migración necesaria |
 | Componentes UI incompatibles | Bajo | Mantener estructura similar, solo cambiar fuente de datos |
 
@@ -446,8 +521,23 @@ La implementación se considera **completa** cuando:
 - [ ] Organizer puede crear perfil de facturación (natural o legal)
 - [ ] Tipo de entidad se bloquea después de primer guardado
 - [ ] Organizer puede agregar múltiples cuentas bancarias
-- [ ] Solo una cuenta bancaria puede estar activa
-- [ ] Activar una cuenta desactiva las demás automáticamente
+- [ ] Solo una cuenta bancaria puede estar marcada como preferida
+- [ ] Para marcar como preferida: requiere `is_active = true` AND `status = verified`
+- [ ] Marcar como preferida desmarca automáticamente la anterior
+- [ ] Cuentas se crean activas (`is_active: true`) pero NO preferidas (`is_preferred: false`)
+- [ ] Usuario debe seleccionar manualmente la cuenta preferida después de verificación
+- [ ] Lista de cuentas muestra todas (activas e inactivas)
+- [ ] Radio buttons habilitados solo para cuentas activas + verificadas
+- [ ] Cuentas inactivas se muestran en gris con botón "Reactivar"
+- [ ] No se pueden eliminar cuentas, solo inactivar
+- [ ] No se puede inactivar la cuenta preferida
+- [ ] Tooltips de ayuda en botones con restricciones
+- [ ] Si no hay cuentas, se muestra formulario automáticamente
+- [ ] Cambio de cuenta preferida requiere botón "Confirmar selección"
+- [ ] **Después de guardar configuración exitosamente, se redirige al dashboard (RN-38)**
+- [ ] **Autocompletado automático si no existe perfil de facturación previo (RN-26)**
+- [ ] **Si existe perfil de facturación, se cargan datos del servicio sin autocompletar (RN-27)**
+- [ ] **No se muestra opción manual "Usar los mismos datos de mi perfil de registro"**
 - [ ] Documentos se envían junto con el formulario al guardar (no inmediatamente)
 - [ ] Documentos se suben a Supabase Storage de forma atómica
 - [ ] Si falla la subida de un documento, se hace rollback de los ya subidos
@@ -455,7 +545,7 @@ La implementación se considera **completa** cuando:
 - [ ] Documentos se organizan por `{user_id}/{document_type}/`
 - [ ] Estado de verificación se muestra correctamente
 - [ ] Cambios en datos bancarios resetean estado a "Pendiente"
-- [ ] Verificación de elegibilidad funciona correctamente
+- [ ] Verificación de elegibilidad basada en cuenta preferida verificada
 - [ ] Validaciones de formato funcionan (documento, NIT, cuenta)
 
 ### Técnicos
@@ -488,4 +578,4 @@ La implementación se considera **completa** cuando:
 > 
 > **Comenzar implementación solo después de aprobación explícita del humano.**
 > 
-> **Referencia de cURLs:** Consultar `specs/register/global-setting-curl.md` para ejemplos de peticiones al backend.
+> **Referencia de cURLs:** Consultar `specs/settings/provider/billing/global-setting-curl.md` para ejemplos de peticiones al backend.

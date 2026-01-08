@@ -1,8 +1,23 @@
 /**
  * Tipos del dominio de Facturación y Pagos
  * 
- * Basado en spec.md v2.0 - Configuración de Facturación y Pagos
+ * Basado en spec.md v2.4 - Configuración de Facturación y Pagos
  * Modelo de datos: billing_profiles, bank_accounts, billing_documents
+ * 
+ * Cambios v2.4:
+ * - RN-13: Las cuentas NUNCA se marcan como preferidas automáticamente
+ * - RN-14: Todas las cuentas se crean con is_active: true pero is_preferred: false
+ * - El usuario debe seleccionar manualmente la cuenta preferida después de verificación
+ * 
+ * Cambios v2.3:
+ * - RN-14: Todas las cuentas se crean con is_active: true por defecto
+ * - (OBSOLETO) La primera cuenta del usuario se marca como is_preferred: true automáticamente
+ * 
+ * Cambios v2.2:
+ * - Eliminado holder_name de bank_accounts
+ * - Agregado is_preferred para indicar cuenta para recibir pagos
+ * - is_active indica si la cuenta está habilitada (puede haber múltiples activas)
+ * - is_preferred requiere is_active=true AND status=verified
  */
 
 // ============================================================
@@ -52,17 +67,20 @@ export interface BillingProfile {
 
 /**
  * Cuenta Bancaria (bank_accounts)
- * Un usuario puede tener múltiples cuentas pero solo una activa
+ * Un usuario puede tener múltiples cuentas, múltiples activas, pero solo una preferida
+ * 
+ * - is_active: Indica si la cuenta está habilitada (puede haber múltiples activas)
+ * - is_preferred: Indica la cuenta para recibir pagos (solo una, requiere active + verified)
  */
 export interface BankAccount {
   id: string
   user_id: string
-  holder_name: string
   bank_name: string
   account_type: AccountType
   account_number: string
   status: VerificationStatus
   is_active: boolean
+  is_preferred: boolean
   rejection_reason?: string | null // Obligatorio si status = rejected
   created_at?: string
   updated_at?: string
@@ -113,19 +131,22 @@ export interface UpdateBillingProfileDTO {
 /** DTO para crear cuenta bancaria */
 export interface CreateBankAccountDTO {
   user_id: string
-  holder_name: string
   bank_name: string
   account_type: AccountType
   account_number: string
+  /** RN-14: Todas las cuentas se crean activas por defecto (is_active: true) */
+  is_active?: boolean
+  /** RN-13/RN-14: Las cuentas NUNCA se marcan como preferidas automáticamente (is_preferred: false) */
+  is_preferred?: boolean
 }
 
 /** DTO para actualizar cuenta bancaria */
 export interface UpdateBankAccountDTO {
-  holder_name?: string
   bank_name?: string
   account_type?: AccountType
   account_number?: string
   is_active?: boolean
+  is_preferred?: boolean
 }
 
 /** DTO para crear referencia de documento */
@@ -158,7 +179,10 @@ export interface PaymentEligibilityResponse {
 export interface BillingData {
   profile: BillingProfile | null
   accounts: BankAccount[]
+  /** @deprecated Use preferredAccount instead */
   activeAccount: BankAccount | null
+  /** Cuenta preferida para recibir pagos (is_preferred=true, requiere active+verified) */
+  preferredAccount: BankAccount | null
   documents: BillingDocument[]
   eligibility: PaymentEligibilityResponse | null
 }
@@ -219,7 +243,6 @@ export interface ContactInfo {
 
 /** Información bancaria (legacy) */
 export interface BankInfo {
-  accountHolder: string
   bankOrProvider: string
   accountType: AccountType
   accountNumber: string
@@ -374,7 +397,8 @@ export function toUIDocumentType(backendType: BackendDocumentType): DocumentType
  */
 export function toBillingSettings(data: BillingData, organizerId: string): BillingSettings {
   const profile = data.profile
-  const activeAccount = data.activeAccount
+  // Usar cuenta preferida en lugar de activa
+  const preferredAccount = data.preferredAccount || data.activeAccount
   const documents = data.documents
 
   if (!profile) {
@@ -400,7 +424,7 @@ export function toBillingSettings(data: BillingData, organizerId: string): Billi
       phone: profile.contact_phone,
       address: profile.fiscal_address,
     },
-    verificationStatus: activeAccount?.status || null,
+    verificationStatus: preferredAccount?.status || null,
     createdAt: profile.created_at,
     updatedAt: profile.updated_at,
   }
@@ -423,13 +447,12 @@ export function toBillingSettings(data: BillingData, organizerId: string): Billi
     }
   }
 
-  // Info bancaria de cuenta activa
-  if (activeAccount) {
+  // Info bancaria de cuenta preferida
+  if (preferredAccount) {
     settings.bankInfo = {
-      accountHolder: activeAccount.holder_name,
-      bankOrProvider: activeAccount.bank_name,
-      accountType: activeAccount.account_type,
-      accountNumber: activeAccount.account_number,
+      bankOrProvider: preferredAccount.bank_name,
+      accountType: preferredAccount.account_type,
+      accountNumber: preferredAccount.account_number,
       bankCertificateUrl: bankCertificate?.storage_path,
     }
   }

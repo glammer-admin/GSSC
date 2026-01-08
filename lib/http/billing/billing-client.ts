@@ -206,6 +206,69 @@ class BillingClient {
   }
 
   /**
+   * Obtiene la cuenta bancaria preferida de un usuario (para recibir pagos)
+   * @param userId - ID del usuario
+   * @returns Cuenta preferida o null si no hay ninguna preferida
+   */
+  async getPreferredBankAccount(userId: string): Promise<BankAccount | null> {
+    try {
+      console.log(`🔍 [BILLING CLIENT] Getting preferred bank account for user: ${userId}`)
+      
+      const response = await this.client.get<BackendArrayResponse<BankAccount>>(
+        "/bank_accounts",
+        {
+          params: {
+            user_id: `eq.${userId}`,
+            is_preferred: "eq.true",
+          },
+          headers: this.getReadHeaders(),
+        }
+      )
+
+      if (!response || response.length === 0) {
+        console.log(`ℹ️ [BILLING CLIENT] No preferred bank account found for user: ${userId}`)
+        return null
+      }
+
+      console.log(`✅ [BILLING CLIENT] Preferred bank account found for user: ${userId}`)
+      return response[0]
+    } catch (error) {
+      this.handleError("getPreferredBankAccount", error)
+      throw error
+    }
+  }
+
+  /**
+   * Obtiene las cuentas bancarias activas de un usuario
+   * @param userId - ID del usuario
+   * @returns Lista de cuentas activas
+   */
+  async getActiveBankAccounts(userId: string): Promise<BankAccount[]> {
+    try {
+      console.log(`🔍 [BILLING CLIENT] Getting active bank accounts for user: ${userId}`)
+      
+      const response = await this.client.get<BackendArrayResponse<BankAccount>>(
+        "/bank_accounts",
+        {
+          params: {
+            user_id: `eq.${userId}`,
+            is_active: "eq.true",
+            order: "created_at.desc",
+          },
+          headers: this.getReadHeaders(),
+        }
+      )
+
+      console.log(`✅ [BILLING CLIENT] Found ${response?.length || 0} active bank accounts for user: ${userId}`)
+      return response || []
+    } catch (error) {
+      this.handleError("getActiveBankAccounts", error)
+      throw error
+    }
+  }
+
+  /**
+   * @deprecated Use getPreferredBankAccount instead
    * Obtiene la cuenta bancaria activa de un usuario
    * @param userId - ID del usuario
    * @returns Cuenta activa o null si no hay ninguna activa
@@ -327,21 +390,46 @@ class BillingClient {
   }
 
   /**
-   * Activa una cuenta bancaria (desactiva las demás automáticamente en el backend)
+   * Activa/reactiva una cuenta bancaria
    * @param accountId - ID de la cuenta a activar
    * @returns Cuenta activada
    */
   async activateBankAccount(accountId: string): Promise<BankAccount> {
+    console.log(`📝 [BILLING CLIENT] Activating bank account: ${accountId}`)
     return this.updateBankAccount(accountId, { is_active: true })
   }
 
   /**
-   * Desactiva una cuenta bancaria
+   * Desactiva/inactiva una cuenta bancaria
+   * NOTA: No se puede inactivar una cuenta preferida (is_preferred=true)
    * @param accountId - ID de la cuenta a desactivar
    * @returns Cuenta desactivada
    */
   async deactivateBankAccount(accountId: string): Promise<BankAccount> {
+    console.log(`📝 [BILLING CLIENT] Deactivating bank account: ${accountId}`)
     return this.updateBankAccount(accountId, { is_active: false })
+  }
+
+  /**
+   * Marca una cuenta bancaria como preferida (para recibir pagos)
+   * NOTA: Requiere is_active=true AND status=verified
+   * Al marcar una cuenta como preferida, la anterior se desmarca automáticamente
+   * @param accountId - ID de la cuenta a marcar como preferida
+   * @returns Cuenta actualizada
+   */
+  async setPreferredBankAccount(accountId: string): Promise<BankAccount> {
+    console.log(`📝 [BILLING CLIENT] Setting preferred bank account: ${accountId}`)
+    return this.updateBankAccount(accountId, { is_preferred: true })
+  }
+
+  /**
+   * Desmarca una cuenta bancaria como preferida
+   * @param accountId - ID de la cuenta a desmarcar
+   * @returns Cuenta actualizada
+   */
+  async unsetPreferredBankAccount(accountId: string): Promise<BankAccount> {
+    console.log(`📝 [BILLING CLIENT] Unsetting preferred bank account: ${accountId}`)
+    return this.updateBankAccount(accountId, { is_preferred: false })
   }
 
   // ============================================================
@@ -481,7 +569,10 @@ class BillingClient {
       this.getBillingDocuments(userId),
     ])
 
-    // Encontrar cuenta activa
+    // Encontrar cuenta preferida (para recibir pagos)
+    const preferredAccount = accounts.find(a => a.is_preferred) || null
+    
+    // Encontrar cuenta activa (legacy, para compatibilidad)
     const activeAccount = accounts.find(a => a.is_active) || null
 
     // Verificar elegibilidad solo si hay perfil
@@ -501,6 +592,7 @@ class BillingClient {
       profile,
       accounts,
       activeAccount,
+      preferredAccount,
       documents,
       eligibility,
     }
