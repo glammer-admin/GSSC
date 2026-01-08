@@ -1,39 +1,59 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { Upload, File, X, AlertCircle } from "lucide-react"
+import { Upload, File, X, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import type { BillingDocumentType } from "@/lib/types/billing/types"
 
 interface DocumentUploadProps {
   label: string
   accept: string
+  documentType: BillingDocumentType
   currentFile?: string
-  onFileSelect: (fileName: string | undefined) => void
+  /**
+   * Callback cuando se selecciona o elimina un archivo.
+   * Recibe el objeto File o undefined si se elimina.
+   * El archivo NO se sube inmediatamente, se almacena en memoria
+   * para ser enviado junto con el formulario.
+   */
+  onFileChange: (file: File | undefined) => void
   disabled?: boolean
   hint?: string
   maxSizeMB?: number
+  /**
+   * Indica si hay un error externo (por ejemplo, validación del formulario padre)
+   */
+  hasError?: boolean
 }
 
 /**
- * Componente placeholder para carga de documentos
+ * Componente para selección de documentos
  * 
- * NOTA: Esta es una implementación mock/placeholder.
- * No realiza carga real de archivos a storage.
- * Solo simula la selección y muestra el nombre del archivo.
+ * IMPORTANTE: Este componente NO sube archivos inmediatamente.
+ * Solo almacena el archivo en memoria y lo expone al padre via onFileChange.
+ * El formulario padre es responsable de enviar el archivo junto con los demás datos.
+ * 
+ * Esto permite:
+ * - Guardado atómico (todos los documentos se envían juntos)
+ * - Rollback si falla alguna subida
+ * - Mejor UX (el usuario no espera por cada documento individualmente)
  */
 export function DocumentUpload({
   label,
   accept,
+  documentType,
   currentFile,
-  onFileSelect,
+  onFileChange,
   disabled = false,
   hint,
-  maxSizeMB = 5,
+  maxSizeMB = 10,
+  hasError = false,
 }: DocumentUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedFileName, setSelectedFileName] = useState<string | undefined>(currentFile)
+  const [selectedFile, setSelectedFile] = useState<File | undefined>(undefined)
 
   const handleClick = () => {
     if (!disabled) {
@@ -67,9 +87,10 @@ export function DocumentUpload({
       return
     }
 
-    // Simular selección exitosa (mock - no hay upload real)
+    // Almacenar archivo en memoria (NO subir)
     setSelectedFileName(file.name)
-    onFileSelect(file.name)
+    setSelectedFile(file)
+    onFileChange(file)
 
     // Limpiar input para permitir seleccionar el mismo archivo
     event.target.value = ""
@@ -77,9 +98,13 @@ export function DocumentUpload({
 
   const handleRemove = () => {
     setSelectedFileName(undefined)
+    setSelectedFile(undefined)
     setError(null)
-    onFileSelect(undefined)
+    onFileChange(undefined)
   }
+
+  // Determinar si mostrar como "ya guardado" (currentFile existe y no hay nuevo archivo seleccionado)
+  const isExistingFile = !!currentFile && !selectedFile
 
   return (
     <div className="space-y-2">
@@ -90,18 +115,35 @@ export function DocumentUpload({
         onChange={handleFileChange}
         className="hidden"
         disabled={disabled}
+        data-document-type={documentType}
       />
 
       {selectedFileName ? (
-        // Archivo seleccionado
-        <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg border">
-          <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-lg">
-            <File className="h-5 w-5 text-primary" />
+        // Archivo seleccionado o existente
+        <div className={cn(
+          "flex items-center gap-3 p-4 rounded-lg border",
+          isExistingFile 
+            ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900" 
+            : "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900"
+        )}>
+          <div className={cn(
+            "flex items-center justify-center w-10 h-10 rounded-lg",
+            isExistingFile 
+              ? "bg-green-100 dark:bg-green-900/50" 
+              : "bg-blue-100 dark:bg-blue-900/50"
+          )}>
+            {isExistingFile ? (
+              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+            ) : (
+              <File className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{selectedFileName}</p>
             <p className="text-xs text-muted-foreground">
-              {label} • Archivo seleccionado
+              {isExistingFile 
+                ? "Documento guardado" 
+                : "Listo para enviar con el formulario"}
             </p>
           </div>
           {!disabled && (
@@ -129,7 +171,7 @@ export function DocumentUpload({
             "hover:border-primary/50 hover:bg-muted/50",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             disabled && "opacity-50 cursor-not-allowed hover:border-border hover:bg-transparent",
-            error && "border-destructive"
+            (error || hasError) && "border-destructive"
           )}
         >
           <div className="flex items-center justify-center w-12 h-12 bg-muted rounded-full">
@@ -158,4 +200,3 @@ export function DocumentUpload({
     </div>
   )
 }
-

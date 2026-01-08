@@ -20,20 +20,27 @@ import {
 interface BankInfoFormProps {
   value: Partial<BankInfo>
   onChange: (value: Partial<BankInfo>) => void
-  onFileChange: (fileName: string | undefined) => void
+  /**
+   * Callback cuando se selecciona o elimina la certificación bancaria.
+   * Recibe el objeto File o undefined si se elimina.
+   * El archivo se enviará junto con el formulario al guardar.
+   */
+  onFileChange: (file: File | undefined) => void
   errors?: Partial<Record<keyof BankInfo, string>>
   disabled?: boolean
 }
 
 /**
- * Formulario de información bancaria
+ * Formulario de información bancaria (para crear nueva cuenta)
  * 
- * Campos obligatorios:
- * - Titular de la cuenta
+ * Campos obligatorios (v2.2 - sin holder_name):
  * - Banco o proveedor
  * - Tipo de cuenta
  * - Número de cuenta
- * - Certificación bancaria (RN-05)
+ * - Certificación bancaria (RN-07)
+ * 
+ * NOTA: El documento NO se sube inmediatamente. Se almacena en memoria
+ * y se envía junto con el formulario al guardar (RN-28).
  */
 export function BankInfoForm({
   value,
@@ -55,24 +62,6 @@ export function BankInfoForm({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Titular de la cuenta */}
-        <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="accountHolder">
-            Titular de la Cuenta <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="accountHolder"
-            placeholder="Nombre completo del titular"
-            value={value.accountHolder || ""}
-            onChange={(e) => updateField("accountHolder", e.target.value)}
-            disabled={disabled}
-            aria-invalid={!!errors.accountHolder}
-          />
-          {errors.accountHolder && (
-            <p className="text-sm text-destructive">{errors.accountHolder}</p>
-          )}
-        </div>
-
         {/* Banco o proveedor */}
         <div className="space-y-2">
           <Label htmlFor="bankOrProvider">
@@ -133,12 +122,15 @@ export function BankInfoForm({
           </Label>
           <Input
             id="accountNumber"
-            placeholder={isWallet ? "Ej: 3001234567" : "Ingresa el número de cuenta"}
+            placeholder={isWallet ? "Ej: 3001234567" : "Ingresa el número de cuenta (6-20 dígitos)"}
             value={value.accountNumber || ""}
             onChange={(e) => updateField("accountNumber", e.target.value)}
             disabled={disabled}
             aria-invalid={!!errors.accountNumber}
           />
+          <p className="text-xs text-muted-foreground">
+            El número de cuenta debe tener entre 6 y 20 dígitos
+          </p>
           {errors.accountNumber && (
             <p className="text-sm text-destructive">{errors.accountNumber}</p>
           )}
@@ -153,10 +145,12 @@ export function BankInfoForm({
           <DocumentUpload
             label={isWallet ? "Comprobante de billetera digital" : "Certificación bancaria"}
             accept={ALLOWED_FILE_FORMATS.bankCertificate.map((f) => `.${f}`).join(",")}
+            documentType="bank_certificate"
             currentFile={value.bankCertificateUrl}
-            onFileSelect={onFileChange}
+            onFileChange={onFileChange}
             disabled={disabled}
             hint={`Formatos permitidos: ${ALLOWED_FILE_FORMATS.bankCertificate.join(", ").toUpperCase()}`}
+            hasError={!!errors.bankCertificateUrl}
           />
           {errors.bankCertificateUrl && (
             <p className="text-sm text-destructive">{errors.bankCertificateUrl}</p>
@@ -166,4 +160,3 @@ export function BankInfoForm({
     </div>
   )
 }
-

@@ -256,25 +256,32 @@ El email usado para consultar la BD DEBE venir del token SSO validado, nunca de 
 ## Especificaciones Relacionadas
 
 - **Manejo de Errores:** Ver `specs/errors/plan.md` para la implementación del sistema de códigos de error.
+- **Configuración de Facturación (Organizer):** Ver `specs/settings/provider/billing/plan.md` para la implementación del módulo de facturación y pagos. Este módulo se implementa **después del registro** y permite a los organizadores configurar sus datos fiscales y bancarios para recibir pagos.
 
 ---
 
 ## Siguientes Pasos (Mejoras Futuras)
 
-1. **Mejoras de UX**
+1. **Configuración de Facturación para Organizadores**
+   - Implementar módulo de billing en `/settings/billing`
+   - Ver `specs/settings/provider/billing/plan.md` para detalles
+   - Integración con backend de Supabase (billing_profiles, bank_accounts, billing_documents)
+   - Carga de documentos a Supabase Storage
+
+2. **Mejoras de UX**
    - Animaciones entre transiciones
    - Onboarding multi-step con progress bar
    - Validación de teléfono con servicio externo
 
-2. **Cambio de Rol Sin Re-Login**
+3. **Cambio de Rol Sin Re-Login**
    - Endpoint `POST /api/auth/switch-role`
    - Componente dropdown en navbar
    - Actualización de sesión sin logout
 
-3. **Analytics**
+4. **Analytics**
    - Tracking de conversión en onboarding
    - Análisis de selección de roles
 
-4. **Integración con Backend de Producción**
+5. **Integración con Backend de Producción**
    - Actualizar variables de entorno para staging/producción
    - Verificar conectividad y performance

@@ -39,7 +39,7 @@ const TEMPORARY_API_ROUTES = [
 
 // Rutas por rol (sesión completa)
 const ROLE_ROUTES: Record<SessionRole, string[]> = {
-  organizer: ["/dashboard", "/settings", "/project"],
+  organizer: ["/dashboard", "/settings", "/project", "/api/settings"],
   supplier: ["/customer-dash"],
   buyer: ["/product"],
 }

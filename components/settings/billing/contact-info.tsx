@@ -2,7 +2,6 @@
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
 import type { ContactInfo } from "@/lib/types/billing/types"
 
 interface ContactInfoFormProps {
@@ -10,16 +9,6 @@ interface ContactInfoFormProps {
   onChange: (value: Partial<ContactInfo>) => void
   errors?: Partial<Record<keyof ContactInfo, string>>
   disabled?: boolean
-  // Datos para autocompletado (RN-09)
-  userData?: {
-    name?: string
-    email?: string
-    phone?: string
-    address?: string
-  }
-  onUseProfileData?: (use: boolean) => void
-  useProfileData?: boolean
-  showAutoComplete?: boolean
 }
 
 /**
@@ -30,18 +19,15 @@ interface ContactInfoFormProps {
  * - Teléfono principal
  * - Dirección completa
  * 
- * RN-09: Para Persona Natural, se puede optar por autocompletar datos desde el perfil
- * RN-10: Los datos autocompletados son editables manualmente
+ * RN-26: Autocompletado automático se maneja en el componente padre (BillingForm)
+ * RN-27: Si ya existe perfil, se cargan datos del servicio
+ * RN-28: Los datos autocompletados son editables manualmente
  */
 export function ContactInfoForm({
   value,
   onChange,
   errors = {},
   disabled = false,
-  userData,
-  onUseProfileData,
-  useProfileData = false,
-  showAutoComplete = false,
 }: ContactInfoFormProps) {
   const updateField = <K extends keyof ContactInfo>(
     field: K,
@@ -50,28 +36,8 @@ export function ContactInfoForm({
     onChange({ ...value, [field]: fieldValue })
   }
 
-  const hasUserData = userData && (userData.email || userData.phone || userData.address)
-
   return (
     <div className="space-y-6">
-      {/* Opción de autocompletado */}
-      {showAutoComplete && hasUserData && onUseProfileData && (
-        <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
-          <Checkbox
-            id="useProfileData"
-            checked={useProfileData}
-            onCheckedChange={(checked) => onUseProfileData(checked === true)}
-            disabled={disabled}
-          />
-          <label
-            htmlFor="useProfileData"
-            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-          >
-            Usar los mismos datos de mi perfil de registro
-          </label>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Email de contacto */}
         <div className="space-y-2">
