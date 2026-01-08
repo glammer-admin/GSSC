@@ -18,6 +18,15 @@ AUTH_TOKEN="tu-jwt-token"
 USER_ID="550e8400-e29b-41d4-a716-446655440000"
 ```
 
+## Headers importantes
+
+Las tablas de billing están en el esquema `gssc_db`, por lo que se requieren headers adicionales:
+
+| Header | Uso | Valor |
+|--------|-----|-------|
+| `Accept-Profile` | Para operaciones GET | `gssc_db` |
+| `Content-Profile` | Para operaciones POST/PATCH/DELETE | `gssc_db` |
+
 ---
 
 # 1. Perfil de Facturación (billing_profiles)
@@ -35,6 +44,7 @@ curl -X POST "${SUPABASE_URL}/rest/v1/billing_profiles" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "user_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -57,6 +67,7 @@ curl -X POST "${SUPABASE_URL}/rest/v1/billing_profiles" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "user_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -80,7 +91,8 @@ Consulta el perfil de facturación de un usuario específico.
 ```bash
 curl -X GET "${SUPABASE_URL}/rest/v1/billing_profiles?user_id=eq.550e8400-e29b-41d4-a716-446655440000" \
   -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
 ```
 
 ### Por ID del perfil
@@ -88,7 +100,8 @@ curl -X GET "${SUPABASE_URL}/rest/v1/billing_profiles?user_id=eq.550e8400-e29b-4
 ```bash
 curl -X GET "${SUPABASE_URL}/rest/v1/billing_profiles?id=eq.660e8400-e29b-41d4-a716-446655440001" \
   -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
 ```
 
 ---
@@ -102,6 +115,7 @@ curl -X PATCH "${SUPABASE_URL}/rest/v1/billing_profiles?user_id=eq.550e8400-e29b
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "fiscal_address": "Nueva Calle 456 #78-90, Bogotá, Colombia",
@@ -117,6 +131,7 @@ curl -X PATCH "${SUPABASE_URL}/rest/v1/billing_profiles?user_id=eq.550e8400-e29b
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "entity_type": "legal",
@@ -129,7 +144,16 @@ curl -X PATCH "${SUPABASE_URL}/rest/v1/billing_profiles?user_id=eq.550e8400-e29b
 
 # 2. Cuentas Bancarias (bank_accounts)
 
-Las cuentas bancarias almacenan la información para recibir pagos. Un organizer puede tener **múltiples cuentas** pero solo **una activa** a la vez.
+Las cuentas bancarias almacenan la información para recibir pagos. Un organizer puede tener **múltiples cuentas**, **múltiples activas**, pero solo **una preferida** a la vez.
+
+**Conceptos clave:**
+- `is_active`: Indica si la cuenta está habilitada para uso. Puede haber múltiples cuentas activas.
+- `is_preferred`: Indica la cuenta seleccionada para recibir pagos. Solo una por usuario. Requiere `is_active = true` AND `status = verified`.
+
+**Restricciones:**
+- No se pueden eliminar cuentas, solo inactivar (`is_active = false`)
+- No se puede inactivar una cuenta que está marcada como preferida
+- Para marcar como preferida, la cuenta debe estar activa y verificada
 
 ## 2.1 Crear cuenta bancaria
 
@@ -142,13 +166,47 @@ curl -X POST "${SUPABASE_URL}/rest/v1/bank_accounts" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "user_id": "550e8400-e29b-41d4-a716-446655440000",
-    "holder_name": "Juan Carlos Pérez García",
     "bank_name": "Bancolombia",
     "account_type": "savings",
     "account_number": "12345678901"
+  }'
+```
+
+### Cuenta corriente
+
+```bash
+curl -X POST "${SUPABASE_URL}/rest/v1/bank_accounts" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
+  -H "Prefer: return=representation" \
+  -d '{
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "bank_name": "Banco de Bogotá",
+    "account_type": "checking",
+    "account_number": "98765432109"
+  }'
+```
+
+### Billetera digital (Nequi, Daviplata, etc.)
+
+```bash
+curl -X POST "${SUPABASE_URL}/rest/v1/bank_accounts" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
+  -H "Prefer: return=representation" \
+  -d '{
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "bank_name": "Nequi",
+    "account_type": "wallet",
+    "account_number": "3001234567"
   }'
 ```
 
@@ -156,20 +214,40 @@ curl -X POST "${SUPABASE_URL}/rest/v1/bank_accounts" \
 
 ## 2.2 Obtener cuentas bancarias
 
-### Todas las cuentas de un usuario
+### Todas las cuentas de un usuario (activas e inactivas)
 
 ```bash
 curl -X GET "${SUPABASE_URL}/rest/v1/bank_accounts?user_id=eq.550e8400-e29b-41d4-a716-446655440000&order=created_at.desc" \
   -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
 ```
 
-### Solo la cuenta activa
+### Solo cuentas activas
 
 ```bash
 curl -X GET "${SUPABASE_URL}/rest/v1/bank_accounts?user_id=eq.550e8400-e29b-41d4-a716-446655440000&is_active=eq.true" \
   -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+### Solo la cuenta preferida (para recibir pagos)
+
+```bash
+curl -X GET "${SUPABASE_URL}/rest/v1/bank_accounts?user_id=eq.550e8400-e29b-41d4-a716-446655440000&is_preferred=eq.true" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+### Cuentas elegibles para ser preferidas (activas + verificadas)
+
+```bash
+curl -X GET "${SUPABASE_URL}/rest/v1/bank_accounts?user_id=eq.550e8400-e29b-41d4-a716-446655440000&is_active=eq.true&status=eq.verified" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
 ```
 
 ### Filtrar por estado
@@ -178,12 +256,14 @@ curl -X GET "${SUPABASE_URL}/rest/v1/bank_accounts?user_id=eq.550e8400-e29b-41d4
 # Cuentas pendientes de verificación
 curl -X GET "${SUPABASE_URL}/rest/v1/bank_accounts?user_id=eq.550e8400-e29b-41d4-a716-446655440000&status=eq.pending" \
   -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
 
 # Cuentas verificadas
 curl -X GET "${SUPABASE_URL}/rest/v1/bank_accounts?user_id=eq.550e8400-e29b-41d4-a716-446655440000&status=eq.verified" \
   -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
 ```
 
 ### Por ID específico
@@ -191,14 +271,15 @@ curl -X GET "${SUPABASE_URL}/rest/v1/bank_accounts?user_id=eq.550e8400-e29b-41d4
 ```bash
 curl -X GET "${SUPABASE_URL}/rest/v1/bank_accounts?id=eq.770e8400-e29b-41d4-a716-446655440002" \
   -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
 ```
 
 ---
 
 ## 2.3 Editar cuenta bancaria
 
-**Nota:** Al modificar campos sensibles (`account_number`, `holder_name`, `bank_name`, `account_type`), el `status` se resetea automáticamente a `pending`.
+**Nota:** Al modificar campos sensibles (`account_number`, `bank_name`, `account_type`), el `status` se resetea automáticamente a `pending`.
 
 ### Actualizar número de cuenta
 
@@ -207,38 +288,135 @@ curl -X PATCH "${SUPABASE_URL}/rest/v1/bank_accounts?id=eq.770e8400-e29b-41d4-a7
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "account_number": "11122233344"
   }'
 ```
 
-### Activar una cuenta
+---
 
-Al activar una cuenta, cualquier otra cuenta activa del mismo usuario se desactiva automáticamente.
+## 2.4 Activar/Reactivar cuenta
+
+Reactiva una cuenta que estaba inactiva. No afecta otras cuentas activas.
 
 ```bash
 curl -X PATCH "${SUPABASE_URL}/rest/v1/bank_accounts?id=eq.770e8400-e29b-41d4-a716-446655440002" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "is_active": true
   }'
 ```
 
-### Desactivar una cuenta
+---
+
+## 2.5 Inactivar cuenta
+
+Inactiva una cuenta. **No se permite si la cuenta está marcada como preferida.**
 
 ```bash
 curl -X PATCH "${SUPABASE_URL}/rest/v1/bank_accounts?id=eq.770e8400-e29b-41d4-a716-446655440002" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "is_active": false
   }'
+```
+
+**Error si es cuenta preferida:**
+```json
+{
+  "error": "CANNOT_INACTIVATE_PREFERRED",
+  "message": "No puede inactivar la cuenta preferida. Seleccione otra primero"
+}
+```
+
+---
+
+## 2.6 Marcar como cuenta preferida
+
+Marca una cuenta como la preferida para recibir pagos. 
+
+**Requisitos:**
+- La cuenta debe estar activa (`is_active = true`)
+- La cuenta debe estar verificada (`status = verified`)
+
+Al marcar una cuenta como preferida, cualquier otra cuenta preferida del mismo usuario se desmarca automáticamente.
+
+```bash
+curl -X PATCH "${SUPABASE_URL}/rest/v1/bank_accounts?id=eq.770e8400-e29b-41d4-a716-446655440002" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
+  -H "Prefer: return=representation" \
+  -d '{
+    "is_preferred": true
+  }'
+```
+
+**Error si cuenta inactiva:**
+```json
+{
+  "error": "CANNOT_SET_PREFERRED_INACTIVE",
+  "message": "Cuenta inactiva. Reactívela primero"
+}
+```
+
+**Error si cuenta no verificada:**
+```json
+{
+  "error": "CANNOT_SET_PREFERRED_UNVERIFIED",
+  "message": "Solo cuentas verificadas pueden ser seleccionadas como preferidas"
+}
+```
+
+---
+
+## 2.7 Desmarcar cuenta preferida
+
+Desmarca la cuenta como preferida. **Nota:** Esto dejará al usuario sin cuenta preferida para recibir pagos.
+
+```bash
+curl -X PATCH "${SUPABASE_URL}/rest/v1/bank_accounts?id=eq.770e8400-e29b-41d4-a716-446655440002" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
+  -H "Prefer: return=representation" \
+  -d '{
+    "is_preferred": false
+  }'
+```
+
+---
+
+## 2.8 Eliminar cuenta (NO PERMITIDO)
+
+**Las cuentas bancarias NO se pueden eliminar**, solo inactivar. Esto es por razones de auditoría y trazabilidad.
+
+```bash
+# ❌ NO USAR - Retornará error
+curl -X DELETE "${SUPABASE_URL}/rest/v1/bank_accounts?id=eq.770e8400-e29b-41d4-a716-446655440002" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Profile: gssc_db"
+```
+
+**Error:**
+```json
+{
+  "error": "ACCOUNT_DELETE_NOT_ALLOWED",
+  "message": "Las cuentas bancarias no se pueden eliminar, solo inactivar"
+}
 ```
 
 ---
@@ -258,6 +436,7 @@ curl -X POST "${SUPABASE_URL}/rest/v1/billing_documents" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "user_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -275,6 +454,7 @@ curl -X POST "${SUPABASE_URL}/rest/v1/billing_documents" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "user_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -292,6 +472,7 @@ curl -X POST "${SUPABASE_URL}/rest/v1/billing_documents" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
     "user_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -311,7 +492,8 @@ curl -X POST "${SUPABASE_URL}/rest/v1/billing_documents" \
 ```bash
 curl -X GET "${SUPABASE_URL}/rest/v1/billing_documents?user_id=eq.550e8400-e29b-41d4-a716-446655440000&order=created_at.desc" \
   -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
 ```
 
 ### Por tipo de documento
@@ -320,12 +502,14 @@ curl -X GET "${SUPABASE_URL}/rest/v1/billing_documents?user_id=eq.550e8400-e29b-
 # Documento de identidad
 curl -X GET "${SUPABASE_URL}/rest/v1/billing_documents?user_id=eq.550e8400-e29b-41d4-a716-446655440000&document_type=eq.id_document" \
   -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
 
 # Certificación bancaria
 curl -X GET "${SUPABASE_URL}/rest/v1/billing_documents?user_id=eq.550e8400-e29b-41d4-a716-446655440000&document_type=eq.bank_certificate" \
   -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}"
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
 ```
 
 ---
@@ -334,11 +518,18 @@ curl -X GET "${SUPABASE_URL}/rest/v1/billing_documents?user_id=eq.550e8400-e29b-
 
 Verifica si un organizer cumple con todos los requisitos para recibir pagos.
 
+**Requisitos para elegibilidad:**
+- Perfil de facturación completo
+- Cuenta bancaria preferida (`is_preferred = true`)
+- Cuenta preferida verificada (`status = verified`)
+- Documentos requeridos cargados
+
 ```bash
 curl -X POST "${SUPABASE_URL}/rest/v1/rpc/check_organizer_payment_eligibility" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
   -d '{
     "p_user_id": "550e8400-e29b-41d4-a716-446655440000"
   }'
@@ -352,11 +543,19 @@ curl -X POST "${SUPABASE_URL}/rest/v1/rpc/check_organizer_payment_eligibility" \
 }
 ```
 
-**Respuesta con error:**
+**Respuesta sin cuenta preferida:**
 ```json
 {
   "eligible": false,
-  "message": "No verified active bank account found"
+  "message": "No verified preferred bank account found"
+}
+```
+
+**Respuesta con cuenta preferida no verificada:**
+```json
+{
+  "eligible": false,
+  "message": "Preferred bank account is not verified"
 }
 ```
 
@@ -445,11 +644,27 @@ curl -X POST "${SUPABASE_URL}/storage/v1/object/list/billing-documents" \
 
 ## Cuentas Bancarias
 - **Número de cuenta:** 6-20 dígitos numéricos
-- Solo una cuenta activa por usuario
+- Puede haber múltiples cuentas activas por usuario
+- Solo una cuenta preferida por usuario
+- Para ser preferida: `is_active = true` AND `status = verified`
+- No se pueden eliminar cuentas, solo inactivar
+- No se puede inactivar la cuenta preferida
 - Al modificar datos sensibles, el estado vuelve a `pending`
 - `rejection_reason` es obligatorio si `status = rejected`
 
 ## Documentos Requeridos
 - **Persona natural:** `id_document` + `bank_certificate`
 - **Empresa:** `rut` + `bank_certificate`
+
+---
+
+# Errores de Negocio
+
+| Código | Descripción |
+|--------|-------------|
+| `CANNOT_INACTIVATE_PREFERRED` | No se puede inactivar la cuenta preferida. Seleccione otra primero |
+| `CANNOT_SET_PREFERRED_INACTIVE` | No se puede marcar como preferida una cuenta inactiva. Reactívela primero |
+| `CANNOT_SET_PREFERRED_UNVERIFIED` | Solo cuentas verificadas pueden ser seleccionadas como preferidas |
+| `ACCOUNT_DELETE_NOT_ALLOWED` | Las cuentas bancarias no se pueden eliminar, solo inactivar |
+| `PAYMENT_BLOCKED_NO_PREFERRED` | No hay cuenta preferida configurada para recibir pagos |
 

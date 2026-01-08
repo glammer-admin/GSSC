@@ -31,17 +31,16 @@ interface BankInfoFormProps {
 }
 
 /**
- * Formulario de información bancaria
+ * Formulario de información bancaria (para crear nueva cuenta)
  * 
- * Campos obligatorios:
- * - Titular de la cuenta
+ * Campos obligatorios (v2.2 - sin holder_name):
  * - Banco o proveedor
  * - Tipo de cuenta
  * - Número de cuenta
  * - Certificación bancaria (RN-07)
  * 
  * NOTA: El documento NO se sube inmediatamente. Se almacena en memoria
- * y se envía junto con el formulario al guardar (RN-22).
+ * y se envía junto con el formulario al guardar (RN-28).
  */
 export function BankInfoForm({
   value,
@@ -63,24 +62,6 @@ export function BankInfoForm({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Titular de la cuenta */}
-        <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="accountHolder">
-            Titular de la Cuenta <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="accountHolder"
-            placeholder="Nombre completo del titular"
-            value={value.accountHolder || ""}
-            onChange={(e) => updateField("accountHolder", e.target.value)}
-            disabled={disabled}
-            aria-invalid={!!errors.accountHolder}
-          />
-          {errors.accountHolder && (
-            <p className="text-sm text-destructive">{errors.accountHolder}</p>
-          )}
-        </div>
-
         {/* Banco o proveedor */}
         <div className="space-y-2">
           <Label htmlFor="bankOrProvider">

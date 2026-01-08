@@ -105,7 +105,6 @@ export async function POST(
 
     // Parsear body
     let input: {
-      holder_name: string
       bank_name: string
       account_type: AccountType
       account_number: string
@@ -120,8 +119,8 @@ export async function POST(
       )
     }
 
-    // Validaciones
-    if (!input.holder_name || !input.bank_name || !input.account_type || !input.account_number) {
+    // Validaciones (v2.2 - sin holder_name)
+    if (!input.bank_name || !input.account_type || !input.account_number) {
       return NextResponse.json(
         { success: false, error: "Todos los campos son obligatorios" },
         { status: 400 }
@@ -149,10 +148,14 @@ export async function POST(
 
     const createData: CreateBankAccountDTO = {
       user_id: userId,
-      holder_name: input.holder_name,
       bank_name: input.bank_name,
       account_type: input.account_type,
       account_number: input.account_number,
+      // RN-14 (v2.4): Todas las cuentas se crean activas por defecto
+      // RN-13 (v2.4): Las cuentas NUNCA se marcan como preferidas automáticamente
+      // El usuario debe seleccionar manualmente la cuenta preferida después de verificación
+      is_active: true,
+      is_preferred: false,
     }
 
     const account = await billingClient.createBankAccount(createData)
