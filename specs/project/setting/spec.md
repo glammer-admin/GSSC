@@ -20,12 +20,14 @@
 - Creación de nuevo proyecto con información básica
 - Configuración de comisión del organizador
 - Configuración de packaging personalizado
-- Configuración de modos de entrega
+- Configuración de modo de entrega (uno por proyecto)
 - Definición del estado inicial del proyecto
 - Edición de proyecto existente
+- Carga de logo del proyecto al Storage
 - Validaciones de campos obligatorios
 - Advertencias y confirmaciones al modificar configuración económica/logística
 - Transiciones de estado del proyecto
+- Integración con backend Supabase (tabla `glam_projects`)
 
 ### 2.2 Excluye (explícito)
 > Todo lo no listado aquí se considera fuera de alcance.
@@ -36,6 +38,7 @@
 - Aplicación real de cambios masivos a productos
 - Cálculo de costos de envío
 - Gestión de pedidos
+- Historial de cambios de configuración (gestionado por triggers del backend)
 
 ---
 
@@ -54,11 +57,12 @@
 | Proyecto | Agrupación de productos que un organizador pone a la venta a través de Glam Urban |
 | Comisión | Porcentaje que el organizador gana sobre cada venta de productos del proyecto |
 | Packaging personalizado | Opción que permite empaquetar productos con branding del proyecto |
-| Modo de entrega | Forma en que los productos llegan al comprador final |
+| Modo de entrega | Forma única en que los productos llegan al comprador final (un proyecto tiene un solo modo) |
 | Borrador | Estado inicial de un proyecto que no está visible públicamente |
 | Activo | Estado de un proyecto visible en la tienda pública y que acepta pedidos |
 | Pausado | Estado de un proyecto que no acepta nuevos pedidos pero procesa los existentes |
 | Finalizado | Estado terminal de un proyecto que ya no puede reactivarse |
+| public_code | Código público único autogenerado por el backend para identificar el proyecto externamente |
 
 ---
 
@@ -67,17 +71,20 @@
 - **RN-01:** El nombre del proyecto debe ser único global en el sistema
 - **RN-02:** El nombre del proyecto no puede modificarse después de la creación
 - **RN-03:** El nombre del proyecto solo permite caracteres alfanuméricos y espacios, con longitud máxima de 100 caracteres
-- **RN-04:** La comisión del organizador debe ser un número entero entre 0 y 100 (porcentaje)
-- **RN-05:** Un proyecto debe tener al menos un modo de entrega activo para poder activarse
-- **RN-06:** Un proyecto requiere nombre, tipo de proyecto, comisión y al menos un modo de entrega para activarse
-- **RN-07:** El estado inicial de un proyecto siempre es "Borrador"
+- **RN-04:** La comisión del organizador debe ser un número decimal entre 0.00 y 100.00 (porcentaje)
+- **RN-05:** Un proyecto debe tener un modo de entrega configurado para poder activarse
+- **RN-06:** Un proyecto requiere nombre, tipo de proyecto, comisión y modo de entrega para activarse
+- **RN-07:** El estado inicial de un proyecto siempre es "Borrador" (`draft`)
 - **RN-08:** Un proyecto finalizado no puede volver a activarse
 - **RN-09:** Al pausar un proyecto, los pedidos existentes continúan su flujo normal
 - **RN-10:** El cambio de packaging solo aplica a nuevos productos, no modifica productos existentes
-- **RN-11:** El logo del proyecto acepta formatos PNG, JPG, JPEG y WebP
-- **RN-12:** El logo del proyecto tiene un tamaño máximo de 2MB; imágenes mayores deben comprimirse automáticamente
+- **RN-11:** El logo del proyecto acepta formatos PNG, JPG, JPEG, WebP y SVG
+- **RN-12:** El logo del proyecto tiene un tamaño máximo de 5MB (límite del bucket); imágenes mayores de 2MB deben comprimirse automáticamente en cliente
 - **RN-13:** La descripción corta tiene un máximo de 500 caracteres
 - **RN-14:** Si no se carga logo, se asigna un avatar por defecto
+- **RN-15:** Un proyecto solo puede tener UN modo de entrega activo (selección exclusiva)
+- **RN-16:** El `public_code` es generado automáticamente por el backend y no puede ser modificado
+- **RN-17:** El `public_code` debe mostrarse como campo de solo lectura en la pantalla de edición
 
 ---
 
@@ -120,11 +127,12 @@ Feature: Creación de nuevo proyecto
 
   Scenario: Crear proyecto en borrador con información mínima
     Given el organizador completa el nombre del proyecto "Mi Proyecto 2024"
-    And selecciona el tipo de proyecto "Equipo"
+    And selecciona el tipo de proyecto "Equipo deportivo"
     And define una comisión del 10%
-    And selecciona al menos un modo de entrega
+    And selecciona un modo de entrega
     When el organizador hace clic en "Crear proyecto"
-    Then el sistema genera un ID único para el proyecto
+    Then el sistema envía los datos al backend
+    And el backend genera un ID único (UUID) y un public_code
     And el proyecto se crea en estado "Borrador"
     And el organizador es redirigido al dashboard
 
@@ -138,7 +146,8 @@ Feature: Creación de nuevo proyecto
   Scenario: Nombre de proyecto duplicado
     Given existe un proyecto con nombre "Proyecto Existente"
     When el organizador intenta crear un proyecto con nombre "Proyecto Existente"
-    Then el sistema muestra error "El nombre del proyecto ya existe"
+    Then el backend retorna error de unicidad
+    And el sistema muestra error "El nombre del proyecto ya existe"
     And el proyecto no se crea
 
   Scenario: Nombre de proyecto con caracteres no permitidos
@@ -152,11 +161,11 @@ Feature: Creación de nuevo proyecto
     Then el sistema muestra error "El nombre no puede exceder 100 caracteres"
 
   Scenario: Activar proyecto sin modo de entrega
-    Given el organizador no ha seleccionado ningún modo de entrega
+    Given el organizador no ha seleccionado un modo de entrega
     And selecciona el estado "Activo"
     When el organizador hace clic en "Crear proyecto"
     Then el sistema bloquea la acción
-    And muestra mensaje "Debe seleccionar al menos un modo de entrega para activar el proyecto"
+    And muestra mensaje "Debe seleccionar un modo de entrega para activar el proyecto"
 
   Scenario: Activar proyecto sin comisión definida
     Given el organizador no ha definido la comisión
@@ -175,6 +184,13 @@ Feature: Creación de nuevo proyecto
     Given el organizador no ha modificado ningún campo
     When el organizador hace clic en "Cancelar"
     Then el organizador es redirigido al dashboard sin confirmación
+
+  Scenario: Error de conexión al crear proyecto
+    Given el organizador completa toda la información obligatoria
+    When el organizador hace clic en "Crear proyecto"
+    And la conexión con el backend falla
+    Then el sistema muestra error "Error de conexión con el servidor"
+    And los datos del formulario se mantienen
 ```
 
 ---
@@ -189,14 +205,23 @@ Feature: Edición de proyecto existente
 
   Background:
     Given el organizador está autenticado
-    And existe un proyecto con ID "proj-123" perteneciente al organizador
-    And el organizador accede a la pantalla de edición en "/project/proj-123/edit"
+    And existe un proyecto con ID (UUID) perteneciente al organizador
+    And el organizador accede a la pantalla de edición en "/project/{id}/edit"
+
+  Scenario: Cargar datos del proyecto para edición
+    Given el proyecto existe en el backend
+    When el organizador accede a la pantalla de edición
+    Then el sistema obtiene los datos del proyecto via GET
+    And muestra el public_code como campo de solo lectura
+    And muestra el nombre como campo deshabilitado
+    And carga todos los demás campos editables
 
   Scenario: Editar información básica del proyecto
     Given el proyecto está en estado "Borrador"
     When el organizador modifica la descripción corta
     And hace clic en "Guardar cambios"
-    Then los cambios se guardan correctamente
+    Then el sistema envía PATCH al backend
+    And los cambios se guardan correctamente
     And el organizador ve mensaje de confirmación
 
   Scenario: Intentar modificar nombre del proyecto
@@ -204,6 +229,12 @@ Feature: Edición de proyecto existente
     When el organizador intenta editar el campo nombre
     Then el campo nombre está deshabilitado
     And muestra tooltip "El nombre no puede modificarse después de la creación"
+
+  Scenario: Visualizar public_code
+    Given el proyecto ya fue creado
+    When el organizador accede a la pantalla de edición
+    Then el campo public_code se muestra como solo lectura
+    And muestra tooltip "Código público generado automáticamente"
 
   Scenario: Modificar comisión con advertencia
     Given el proyecto tiene productos asociados
@@ -220,12 +251,24 @@ Feature: Edición de proyecto existente
     And el mensaje indica "Este cambio solo aplicará a nuevos productos"
     And el mensaje indica "Los productos existentes mantendrán su configuración actual"
 
-  Scenario: Modificar modos de entrega con advertencia
+  Scenario: Modificar modo de entrega con advertencia
     Given el proyecto tiene productos asociados
-    When el organizador modifica los modos de entrega
+    When el organizador modifica el modo de entrega
     Then el sistema muestra modal de advertencia
     And el mensaje indica "Este cambio afectará las opciones de entrega disponibles"
     And el mensaje indica "Los pedidos existentes no se verán afectados"
+
+  Scenario: Error al cargar proyecto inexistente
+    Given el proyecto no existe en el backend
+    When el organizador accede a la pantalla de edición
+    Then el sistema muestra error "Proyecto no encontrado"
+    And redirige al dashboard
+
+  Scenario: Error de permisos al editar proyecto ajeno
+    Given el proyecto pertenece a otro organizador
+    When el organizador accede a la pantalla de edición
+    Then el sistema muestra error "No tienes permiso para editar este proyecto"
+    And redirige al dashboard
 ```
 
 ---
@@ -245,74 +288,115 @@ Feature: Gestión de logo del proyecto
   Scenario: Cargar logo válido
     Given el organizador selecciona una imagen PNG de 500KB
     When el sistema procesa la imagen
-    Then la imagen se muestra como preview
-    And el logo queda asociado al proyecto
+    Then la imagen se muestra como preview en memoria
+    And el logo se subirá al Storage al guardar el proyecto
 
   Scenario: Cargar logo con formato no soportado
     Given el organizador selecciona una imagen BMP
     When el sistema valida el archivo
-    Then el sistema muestra error "Formato no soportado. Use PNG, JPG o WebP"
+    Then el sistema muestra error "Formato no soportado. Use PNG, JPG, WebP o SVG"
     And la imagen no se carga
 
-  Scenario: Cargar logo que excede el tamaño máximo
-    Given el organizador selecciona una imagen de 5MB
+  Scenario: Cargar logo que excede 2MB pero menor a 5MB
+    Given el organizador selecciona una imagen de 3MB
     When el sistema procesa la imagen
     Then el sistema comprime automáticamente la imagen a menos de 2MB
     And la imagen comprimida se muestra como preview
     And se muestra mensaje informativo "La imagen fue optimizada automáticamente"
 
+  Scenario: Cargar logo que excede el límite del bucket (5MB)
+    Given el organizador selecciona una imagen de 6MB
+    When el sistema valida el archivo
+    Then el sistema muestra error "La imagen excede el tamaño máximo permitido (5MB)"
+    And la imagen no se carga
+
+  Scenario: Subir logo al Storage al crear proyecto
+    Given el organizador ha seleccionado un logo válido
+    When el organizador hace clic en "Crear proyecto"
+    Then el sistema primero crea el proyecto en el backend
+    And obtiene el ID (UUID) del proyecto creado
+    Then sube el logo al bucket "project-logos" con path "{project_id}/logo.{extension}"
+    And la URL pública del logo queda disponible
+
+  Scenario: Actualizar logo existente
+    Given el proyecto ya tiene un logo en Storage
+    When el organizador selecciona una nueva imagen
+    And hace clic en "Guardar cambios"
+    Then el sistema sube el nuevo logo con x-upsert: true
+    And el logo anterior es reemplazado
+
   Scenario: Proyecto sin logo
     Given el organizador no ha cargado ningún logo
     When el proyecto se crea
     Then el sistema asigna un avatar por defecto al proyecto
+
+  Scenario: Error al subir logo al Storage
+    Given el organizador ha seleccionado un logo válido
+    When el sistema intenta subir al Storage y falla
+    Then el sistema muestra error "Error al subir el logo. El proyecto fue creado sin logo."
+    And el proyecto se mantiene sin logo (avatar por defecto)
 ```
 
 ---
 
-### 7.4 Caso de uso: Configuración de modos de entrega
+### 7.4 Caso de uso: Configuración de modo de entrega
 
 ```gherkin
-Feature: Configuración de modos de entrega
+Feature: Configuración de modo de entrega
   Como organizador autenticado
-  Quiero configurar los modos de entrega de mi proyecto
+  Quiero configurar el modo de entrega de mi proyecto
   Para definir cómo llegarán los productos a los compradores
 
   Background:
     Given el organizador está autenticado
     And el organizador está en la pantalla de crear/editar proyecto
 
-  Scenario: Habilitar entrega en sede del organizador
-    Given el organizador activa la opción "Entrega en sede del organizador"
+  Scenario: Seleccionar modo de entrega (selección exclusiva)
+    Given el organizador está configurando el modo de entrega
+    When ve las opciones disponibles
+    Then las opciones son radio buttons (selección única)
+    And las opciones son: "Ubicación del organizador", "Domicilio del cliente", "Punto de retiro Glam Urban"
+
+  Scenario: Seleccionar entrega en ubicación del organizador
+    Given el organizador selecciona "Ubicación del organizador"
     When el sistema muestra los campos adicionales
     Then el organizador debe ingresar la dirección de entrega
     And debe seleccionar la periodicidad de entrega
 
   Scenario: Seleccionar periodicidad de entrega en sede
-    Given la opción "Entrega en sede del organizador" está activa
+    Given la opción "Ubicación del organizador" está seleccionada
     When el organizador selecciona la periodicidad
-    Then las opciones disponibles son "Semanal", "Quincenal", "Mensual" y "Lo más pronto posible"
+    Then las opciones disponibles son "Semanal", "Quincenal", "Mensual" y "Inmediatamente"
 
-  Scenario: Habilitar entrega a domicilio con costo para el cliente
-    Given el organizador activa la opción "Entrega a domicilio del comprador"
+  Scenario: Seleccionar entrega a domicilio con costo para el cliente
+    Given el organizador selecciona "Domicilio del cliente"
     When el organizador selecciona "Se cobra el domicilio al cliente"
-    Then el sistema registra que el costo se calculará según ubicación
+    Then el sistema registra delivery_fee_type como "charged_to_customer"
 
-  Scenario: Habilitar entrega a domicilio gratis
-    Given el organizador activa la opción "Entrega a domicilio del comprador"
+  Scenario: Seleccionar entrega a domicilio gratis
+    Given el organizador selecciona "Domicilio del cliente"
     When el organizador selecciona "Entrega gratis"
-    Then el sistema muestra información "El costo está incluido en el precio del producto"
+    Then el sistema registra delivery_fee_type como "included_in_price"
+    And muestra información "El costo está incluido en el precio del producto"
     And muestra advertencia "Esto reduce la ganancia del organizador"
 
-  Scenario: Habilitar recolección en Glam Urban
-    Given el organizador activa la opción "Recolección por el organizador en Glam Urban"
+  Scenario: Seleccionar recolección en Glam Urban
+    Given el organizador selecciona "Punto de retiro Glam Urban"
     Then el sistema muestra texto informativo "Sin costo adicional"
     And no solicita información adicional
+    And delivery_config se envía como null
 
   Scenario: Intentar guardar sin modo de entrega
-    Given el organizador no ha seleccionado ningún modo de entrega
+    Given el organizador no ha seleccionado un modo de entrega
     And el proyecto está en estado "Activo" o se intenta activar
     When el organizador hace clic en "Guardar"
-    Then el sistema muestra error "Debe seleccionar al menos un modo de entrega"
+    Then el sistema muestra error "Debe seleccionar un modo de entrega"
+
+  Scenario: Cambiar de un modo de entrega a otro
+    Given el organizador tiene seleccionado "Ubicación del organizador"
+    When selecciona "Domicilio del cliente"
+    Then la configuración anterior se limpia
+    And se muestran los campos del nuevo modo seleccionado
 ```
 
 ---
@@ -430,55 +514,100 @@ Feature: Configuración de comisión del organizador
 
 ---
 
-## 8. Contratos funcionales (conceptuales)
+## 8. Contratos funcionales (Backend API)
 
-### 8.1 Entradas
+### 8.1 Mapeo de campos Frontend ↔ Backend
+
+| Frontend | Backend (glam_projects) | Notas |
+|----------|-------------------------|-------|
+| name | name | Único global, no editable post-creación |
+| projectType | type | Valores: `sports_team`, `educational_institution`, `company`, `group`, `other` |
+| description | description | Máx 500 caracteres |
+| commission | commission_percent | Decimal 0.00-100.00 |
+| customPackaging | packaging_custom | Boolean |
+| deliveryType | delivery_type | `organizer_location`, `customer_home`, `glam_urban_pickup` |
+| deliveryConfig | delivery_config | JSON según delivery_type |
+| status | status | `draft`, `active`, `paused`, `finished` |
+| - | public_code | Solo lectura, autogenerado |
+| - | organizer_id | Se toma del userId de la sesión |
+| logoFile | (Storage) | Bucket: `project-logos`, path: `{project_id}/logo.{ext}` |
+
+### 8.2 Entradas (POST /api/project)
 
 **Campos obligatorios para crear proyecto:**
-- Nombre del proyecto (alfanumérico, máx 100 caracteres, único global)
-- Tipo de proyecto (Equipo, Institución, Empresa, Grupo, Otro)
+- `name`: string (alfanumérico + espacios, máx 100 caracteres, único global)
+- `type`: enum (`sports_team`, `educational_institution`, `company`, `group`, `other`)
 
 **Campos obligatorios para activar proyecto:**
-- Nombre del proyecto
-- Tipo de proyecto
-- Comisión del organizador (entero 0-100)
-- Al menos un modo de entrega configurado
+- Todos los anteriores, más:
+- `commission_percent`: decimal (0.00-100.00)
+- `delivery_type`: enum con su `delivery_config` correspondiente
 
 **Campos opcionales:**
-- Logo del proyecto (PNG, JPG, JPEG, WebP, máx 2MB)
-- Descripción corta (máx 500 caracteres)
-- Packaging personalizado (Sí/No)
+- `description`: string (máx 500 caracteres)
+- `packaging_custom`: boolean (default: false)
+- `logo_file`: File (PNG, JPG, JPEG, WebP, SVG - máx 5MB)
 
-**Configuración de entrega en sede (si habilitado):**
-- Dirección de entrega (texto libre)
-- Periodicidad (Semanal, Quincenal, Mensual, Lo más pronto posible)
+**delivery_config según delivery_type:**
 
-**Configuración de entrega a domicilio (si habilitado):**
-- Tipo de costo (Cobrado al cliente / Gratis)
+```json
+// organizer_location
+{
+  "address": "Dirección completa",
+  "periodicity": "weekly|biweekly|monthly|immediately"
+}
 
-### 8.2 Salidas
+// customer_home
+{
+  "delivery_fee_type": "charged_to_customer|included_in_price",
+  "delivery_fee_value": 8500  // opcional, en centavos
+}
 
-**Creación exitosa:**
-- ID único del proyecto generado
-- Proyecto creado en el estado seleccionado
-- Redirección al dashboard
+// glam_urban_pickup
+null
+```
 
-**Edición exitosa:**
-- Cambios guardados
-- Mensaje de confirmación
+### 8.3 Salidas
 
-### 8.3 Errores de negocio
+**Creación exitosa (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "public_code": "PROJ-XXXX",
+    "name": "...",
+    // ... todos los campos del proyecto
+  }
+}
+```
 
-| Código lógico | Condición |
-|---------------|-----------|
-| PROJ_NAME_DUPLICATE | El nombre del proyecto ya existe en el sistema |
-| PROJ_NAME_INVALID | El nombre contiene caracteres no permitidos |
-| PROJ_NAME_TOO_LONG | El nombre excede 100 caracteres |
-| PROJ_COMMISSION_INVALID | La comisión no es un entero entre 0 y 100 |
-| PROJ_NO_DELIVERY_MODE | No se ha seleccionado ningún modo de entrega |
-| PROJ_MISSING_REQUIRED | Faltan campos obligatorios para activar |
-| PROJ_LOGO_INVALID_FORMAT | El formato del logo no es soportado |
-| PROJ_STATE_TRANSITION_INVALID | La transición de estado no es válida |
+**Edición exitosa (200):**
+```json
+{
+  "success": true,
+  "data": { /* proyecto actualizado */ },
+  "message": "Proyecto actualizado exitosamente"
+}
+```
+
+### 8.4 Errores de negocio
+
+| Código HTTP | Código lógico | Condición |
+|-------------|---------------|-----------|
+| 400 | PROJ_NAME_DUPLICATE | El nombre del proyecto ya existe en el sistema |
+| 400 | PROJ_NAME_INVALID | El nombre contiene caracteres no permitidos |
+| 400 | PROJ_NAME_TOO_LONG | El nombre excede 100 caracteres |
+| 400 | PROJ_COMMISSION_INVALID | La comisión no es un decimal entre 0 y 100 |
+| 400 | PROJ_NO_DELIVERY_MODE | No se ha seleccionado un modo de entrega |
+| 400 | PROJ_MISSING_REQUIRED | Faltan campos obligatorios para activar |
+| 400 | PROJ_LOGO_INVALID_FORMAT | El formato del logo no es soportado |
+| 400 | PROJ_STATE_TRANSITION_INVALID | La transición de estado no es válida |
+| 401 | UNAUTHORIZED | Sesión no válida |
+| 403 | FORBIDDEN | No tiene permiso para este proyecto |
+| 404 | PROJ_NOT_FOUND | Proyecto no encontrado |
+| 500 | LOGO_UPLOAD_FAILED | Error al subir logo al Storage |
+| 503 | NETWORK_ERROR | Error de conexión con el backend |
 
 ---
 
@@ -499,6 +628,9 @@ Feature: Configuración de comisión del organizador
 - Si el nombre del proyecto tiene solo espacios, tratarlo como inválido
 - Si se pierde conexión durante la creación, mantener datos en formulario
 - Nombres de proyecto con mayúsculas/minúsculas diferentes se consideran duplicados (case-insensitive)
+- Si el proyecto se crea exitosamente pero falla la subida del logo, el proyecto queda sin logo (avatar por defecto)
+- Si el backend retorna error de unicidad en nombre, mostrar error específico al usuario
+- El `public_code` no se envía al crear/editar, es generado y retornado por el backend
 
 ---
 
@@ -521,15 +653,21 @@ Feature: Configuración de comisión del organizador
 - No se implementa el cálculo de costos de envío
 - No se implementa la modificación masiva de productos al cambiar configuración
 - No se implementa la gestión de pedidos
-- No se implementa integración con backend real (fase mock)
+- No se implementa visualización del historial de cambios (gestionado por triggers del backend)
 
 ---
 
 ## 13. Versionado
 
-- Versión: v1.0
-- Fecha: 2025-12-18
-- Cambios: Versión inicial del spec
+- Versión: v2.0
+- Fecha: 2026-01-14
+- Cambios:
+  - Integración con backend Supabase (tabla `glam_projects`)
+  - Cambio de múltiples modos de entrega a modo único (selección exclusiva)
+  - Mapeo de campos al formato del backend
+  - Integración con Storage para logos (bucket `project-logos`)
+  - Campo `public_code` visible en edición
+  - Eliminación de fase mock
 
 ---
 

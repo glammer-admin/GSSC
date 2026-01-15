@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation"
 import { getSession, isCompleteSession } from "@/lib/auth/session-manager"
-import { getProjectById } from "@/lib/mocks/project-loader"
+import { getProjectClient, getProjectStorageClient } from "@/lib/http/project"
+import { toProject } from "@/lib/types/project/types"
 import { ServerAuthenticatedLayout } from "@/components/server-authenticated-layout"
 import { ProjectForm } from "@/components/project/project-form"
 
@@ -8,9 +9,61 @@ interface EditProjectPageProps {
   params: Promise<{ id: string }>
 }
 
+/**
+ * Obtiene el proyecto desde el backend
+ */
+async function getProject(id: string, userId: string) {
+  try {
+    const projectClient = getProjectClient()
+    const backendProject = await projectClient.getProjectById(id)
+    
+    if (!backendProject) {
+      return null
+    }
+    
+    // Verificar propiedad
+    if (backendProject.organizer_id !== userId) {
+      return null
+    }
+    
+    // Intentar obtener URL del logo
+    let logoUrl: string | undefined
+    try {
+      const storageClient = getProjectStorageClient()
+      const files = await storageClient.listProjectFiles(id)
+      
+      if (files.length > 0) {
+        const logoFile = files.find(f => f.startsWith("logo."))
+        if (logoFile) {
+          const extension = logoFile.split(".").pop() || "png"
+          logoUrl = storageClient.getPublicUrl(id, extension)
+        }
+      }
+    } catch {
+      // Ignorar errores al obtener logo
+    }
+    
+    return toProject(backendProject, logoUrl)
+  } catch (error) {
+    console.error("Error loading project:", error)
+    return null
+  }
+}
+
 export async function generateMetadata({ params }: EditProjectPageProps) {
   const { id } = await params
-  const project = await getProjectById(id)
+  
+  // Validar sesión para metadata
+  const session = await getSession()
+  if (!session || !isCompleteSession(session)) {
+    return {
+      title: "Editar proyecto | GSSC",
+      description: "Editar configuración del proyecto",
+    }
+  }
+  
+  const userId = session.userId || session.sub
+  const project = await getProject(id, userId)
   
   return {
     title: project ? `Editar ${project.name} | GSSC` : "Editar proyecto | GSSC",
@@ -24,7 +77,7 @@ export async function generateMetadata({ params }: EditProjectPageProps) {
  * Server Component que:
  * - Valida sesión del usuario
  * - Verifica rol organizador
- * - Carga el proyecto por ID
+ * - Carga el proyecto por ID desde el backend
  * - Verifica propiedad del proyecto
  * - Renderiza el formulario de edición
  */
@@ -54,17 +107,14 @@ export default async function EditProjectPage({ params }: EditProjectPageProps) 
     redirect("/")
   }
   
-  // Cargar proyecto
-  const project = await getProjectById(id)
+  const userId = session.userId || session.sub
+  
+  // Cargar proyecto desde backend
+  const project = await getProject(id, userId)
   
   if (!project) {
     notFound()
   }
-  
-  // Verificar propiedad (en mock, usamos el userId de la sesión)
-  // En producción, esto se validaría contra el backend
-  // Por ahora, permitimos acceso si es organizador
-  // La validación real se hace en el API al guardar
   
   return (
     <ServerAuthenticatedLayout session={session}>
@@ -87,4 +137,3 @@ export default async function EditProjectPage({ params }: EditProjectPageProps) 
     </ServerAuthenticatedLayout>
   )
 }
-

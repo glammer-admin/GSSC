@@ -22,15 +22,16 @@ import { WarningModal, type WarningType } from "./warning-modal"
 import {
   validateProjectName,
   validateCommission,
-  hasDeliveryMode,
+  hasDeliveryType,
   canActivateProject,
-  DEFAULT_DELIVERY_MODES,
 } from "@/lib/types/project/types"
 import type {
   Project,
   ProjectType,
   ProjectStatus,
-  DeliveryModes,
+  DeliveryType,
+  DeliveryConfig,
+  OrganizerLocationConfig,
   CreateProjectInput,
   UpdateProjectInput,
 } from "@/lib/types/project/types"
@@ -52,7 +53,7 @@ interface FormErrors {
       periodicity?: string
     }
     home?: {
-      costType?: string
+      feeType?: string
     }
   }
   status?: string
@@ -62,10 +63,10 @@ interface FormErrors {
  * Formulario principal de creación/edición de proyecto
  * 
  * Client Component que maneja:
- * - Información básica
+ * - Información básica (incluye publicCode en edición)
  * - Comisión
  * - Packaging
- * - Modos de entrega
+ * - Modo de entrega (selección única)
  * - Estado
  */
 export function ProjectForm({ project }: ProjectFormProps) {
@@ -77,12 +78,11 @@ export function ProjectForm({ project }: ProjectFormProps) {
   const [projectType, setProjectType] = useState<ProjectType | undefined>(project?.projectType)
   const [description, setDescription] = useState(project?.description || "")
   const [logoUrl, setLogoUrl] = useState<string | undefined>(project?.logoUrl)
-  const [logoFileName, setLogoFileName] = useState<string | undefined>()
+  const [logoFile, setLogoFile] = useState<File | undefined>()
   const [commission, setCommission] = useState<number | undefined>(project?.commission)
   const [customPackaging, setCustomPackaging] = useState(project?.customPackaging || false)
-  const [deliveryModes, setDeliveryModes] = useState<DeliveryModes>(
-    project?.deliveryModes || DEFAULT_DELIVERY_MODES
-  )
+  const [deliveryType, setDeliveryType] = useState<DeliveryType | undefined>(project?.deliveryType)
+  const [deliveryConfig, setDeliveryConfig] = useState<DeliveryConfig>(project?.deliveryConfig || null)
   const [status, setStatus] = useState<ProjectStatus>(project?.status || "draft")
   
   // Estado de UI
@@ -103,7 +103,8 @@ export function ProjectForm({ project }: ProjectFormProps) {
     logoUrl: project?.logoUrl,
     commission: project?.commission,
     customPackaging: project?.customPackaging || false,
-    deliveryModes: project?.deliveryModes || DEFAULT_DELIVERY_MODES,
+    deliveryType: project?.deliveryType,
+    deliveryConfig: project?.deliveryConfig || null,
     status: project?.status || "draft",
   }), [project])
   
@@ -115,12 +116,10 @@ export function ProjectForm({ project }: ProjectFormProps) {
         name.trim() !== "" ||
         projectType !== undefined ||
         description.trim() !== "" ||
-        logoUrl !== undefined ||
+        logoFile !== undefined ||
         commission !== undefined ||
         customPackaging !== false ||
-        deliveryModes.venue.enabled ||
-        deliveryModes.home.enabled ||
-        deliveryModes.pickup.enabled
+        deliveryType !== undefined
       )
     }
     
@@ -128,10 +127,11 @@ export function ProjectForm({ project }: ProjectFormProps) {
     return (
       projectType !== initialValues.projectType ||
       description !== initialValues.description ||
-      logoUrl !== initialValues.logoUrl ||
+      logoFile !== undefined ||
       commission !== initialValues.commission ||
       customPackaging !== initialValues.customPackaging ||
-      JSON.stringify(deliveryModes) !== JSON.stringify(initialValues.deliveryModes) ||
+      deliveryType !== initialValues.deliveryType ||
+      JSON.stringify(deliveryConfig) !== JSON.stringify(initialValues.deliveryConfig) ||
       status !== initialValues.status
     )
   }, [
@@ -139,69 +139,36 @@ export function ProjectForm({ project }: ProjectFormProps) {
     name,
     projectType,
     description,
-    logoUrl,
+    logoFile,
     commission,
     customPackaging,
-    deliveryModes,
+    deliveryType,
+    deliveryConfig,
     status,
     initialValues,
   ])
   
   // Handlers con advertencias para modo edición
   const handleCommissionChange = useCallback((value: number | undefined) => {
-    if (isEditMode && project?.hasProducts && value !== initialValues.commission) {
-      setWarningModal({
-        open: true,
-        type: "commission",
-        pendingAction: () => setCommission(value),
-      })
-    } else {
-      setCommission(value)
-    }
-  }, [isEditMode, project?.hasProducts, initialValues.commission])
+    // TODO: Verificar si el proyecto tiene productos para mostrar advertencia
+    setCommission(value)
+  }, [])
   
   const handlePackagingChange = useCallback((value: boolean) => {
-    if (isEditMode && project?.hasProducts && value !== initialValues.customPackaging) {
-      setWarningModal({
-        open: true,
-        type: "packaging",
-        pendingAction: () => setCustomPackaging(value),
-      })
-    } else {
-      setCustomPackaging(value)
-    }
-  }, [isEditMode, project?.hasProducts, initialValues.customPackaging])
+    // TODO: Verificar si el proyecto tiene productos para mostrar advertencia
+    setCustomPackaging(value)
+  }, [])
   
-  const handleDeliveryModesChange = useCallback((modes: DeliveryModes) => {
-    if (isEditMode && project?.hasProducts) {
-      const hasSignificantChange = 
-        modes.venue.enabled !== initialValues.deliveryModes.venue.enabled ||
-        modes.home.enabled !== initialValues.deliveryModes.home.enabled ||
-        modes.pickup.enabled !== initialValues.deliveryModes.pickup.enabled
-      
-      if (hasSignificantChange) {
-        setWarningModal({
-          open: true,
-          type: "delivery",
-          pendingAction: () => setDeliveryModes(modes),
-        })
-        return
-      }
-    }
-    setDeliveryModes(modes)
-  }, [isEditMode, project?.hasProducts, initialValues.deliveryModes])
+  const handleDeliveryTypeChange = useCallback((type: DeliveryType) => {
+    // TODO: Verificar si el proyecto tiene productos para mostrar advertencia
+    setDeliveryType(type)
+  }, [])
+  
+  const handleDeliveryConfigChange = useCallback((config: DeliveryConfig) => {
+    setDeliveryConfig(config)
+  }, [])
   
   const handleStatusChange = useCallback((newStatus: ProjectStatus) => {
-    // Advertencia al pausar con pedidos activos
-    if (newStatus === "paused" && project?.hasActiveOrders) {
-      setWarningModal({
-        open: true,
-        type: "pause",
-        pendingAction: () => setStatus(newStatus),
-      })
-      return
-    }
-    
     // Advertencia al finalizar
     if (newStatus === "finished") {
       setWarningModal({
@@ -213,12 +180,19 @@ export function ProjectForm({ project }: ProjectFormProps) {
     }
     
     setStatus(newStatus)
-  }, [project?.hasActiveOrders])
-  
-  const handleLogoChange = useCallback((dataUrl: string | undefined, fileName: string | undefined) => {
-    setLogoUrl(dataUrl)
-    setLogoFileName(fileName)
   }, [])
+  
+  const handleLogoChange = useCallback((file: File | undefined, previewUrl: string | undefined) => {
+    setLogoFile(file)
+    if (previewUrl) {
+      setLogoUrl(previewUrl)
+    } else if (!file) {
+      // Si se elimina el archivo, también eliminar la URL si era un preview
+      if (logoUrl?.startsWith("data:")) {
+        setLogoUrl(project?.logoUrl)
+      }
+    }
+  }, [logoUrl, project?.logoUrl])
   
   const handleWarningConfirm = useCallback(() => {
     if (warningModal.pendingAction) {
@@ -226,6 +200,11 @@ export function ProjectForm({ project }: ProjectFormProps) {
     }
     setWarningModal({ open: false, type: null, pendingAction: null })
   }, [warningModal.pendingAction])
+  
+  // Type guard para configuración de venue
+  const isOrganizerLocationConfig = (config: DeliveryConfig): config is OrganizerLocationConfig => {
+    return config !== null && "address" in config
+  }
   
   // Validar formulario
   const validateForm = useCallback((): boolean => {
@@ -254,24 +233,24 @@ export function ProjectForm({ project }: ProjectFormProps) {
       isValid = false
     }
     
-    // Validar modos de entrega si está activo o se intenta activar
+    // Validar modo de entrega si está activo o se intenta activar
     if (status === "active" || (isEditMode && project?.status === "active")) {
-      if (!hasDeliveryMode(deliveryModes)) {
+      if (!hasDeliveryType(deliveryType)) {
         newErrors.deliveryModes = {
-          general: "Debe seleccionar al menos un modo de entrega para activar el proyecto",
+          general: "Debe seleccionar un modo de entrega para activar el proyecto",
         }
         isValid = false
       }
     }
     
-    // Validar configuración de modos de entrega habilitados
-    if (deliveryModes.venue.enabled) {
+    // Validar configuración de modo de entrega si está seleccionado
+    if (deliveryType === "organizer_location" && isOrganizerLocationConfig(deliveryConfig)) {
       const venueErrors: FormErrors["deliveryModes"] = { venue: {} }
-      if (!deliveryModes.venue.address?.trim()) {
+      if (!deliveryConfig.address?.trim()) {
         venueErrors.venue!.address = "La dirección es obligatoria"
         isValid = false
       }
-      if (!deliveryModes.venue.periodicity) {
+      if (!deliveryConfig.periodicity) {
         venueErrors.venue!.periodicity = "La periodicidad es obligatoria"
         isValid = false
       }
@@ -280,33 +259,25 @@ export function ProjectForm({ project }: ProjectFormProps) {
       }
     }
     
-    if (deliveryModes.home.enabled && !deliveryModes.home.costType) {
-      newErrors.deliveryModes = {
-        ...newErrors.deliveryModes,
-        home: { costType: "Selecciona el tipo de costo" },
-      }
-      isValid = false
-    }
-    
     // Validar requisitos para activar
     if (status === "active") {
       const activationCheck = canActivateProject({
         name,
         projectType,
         commission,
-        deliveryModes,
+        deliveryType,
+        deliveryConfig,
         customPackaging,
         status,
       })
       if (!activationCheck.valid) {
-        // Los errores específicos ya fueron agregados arriba
         isValid = false
       }
     }
     
     setErrors(newErrors)
     return isValid
-  }, [isEditMode, name, projectType, commission, deliveryModes, status, project?.status])
+  }, [isEditMode, name, projectType, commission, deliveryType, deliveryConfig, status, project?.status])
   
   // Manejar envío del formulario
   const handleSubmit = async (e: React.FormEvent) => {
@@ -321,35 +292,42 @@ export function ProjectForm({ project }: ProjectFormProps) {
     
     try {
       const url = isEditMode ? `/api/project/${project.id}` : "/api/project"
-      const method = isEditMode ? "PUT" : "POST"
+      const method = isEditMode ? "PATCH" : "POST"
       
-      const body: CreateProjectInput | UpdateProjectInput = isEditMode
+      // Preparar datos del formulario
+      const formData = new FormData()
+      
+      const bodyData: CreateProjectInput | UpdateProjectInput = isEditMode
         ? {
             projectType,
             description: description.trim() || undefined,
-            logoFileName,
             commission,
             customPackaging,
-            deliveryModes,
+            deliveryType,
+            deliveryConfig,
             status,
           }
         : {
             name: name.trim(),
             projectType: projectType!,
             description: description.trim() || undefined,
-            logoFileName,
             commission: commission!,
             customPackaging,
-            deliveryModes,
+            deliveryType: deliveryType!,
+            deliveryConfig,
             status,
           }
       
+      formData.append("data", JSON.stringify(bodyData))
+      
+      // Agregar logo si hay uno nuevo
+      if (logoFile) {
+        formData.append("logo_file", logoFile)
+      }
+      
       const response = await fetch(url, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
+        body: formData,
       })
       
       const result = await response.json()
@@ -374,7 +352,6 @@ export function ProjectForm({ project }: ProjectFormProps) {
           ? error.message
           : "Error al guardar el proyecto"
       )
-    } finally {
       setIsSubmitting(false)
     }
   }
@@ -410,7 +387,8 @@ export function ProjectForm({ project }: ProjectFormProps) {
               projectType={projectType}
               description={description}
               logoUrl={logoUrl}
-              logoFileName={logoFileName}
+              logoFile={logoFile}
+              publicCode={project?.publicCode}
               isEditMode={isEditMode}
               disabled={isSubmitting}
               errors={{
@@ -432,7 +410,7 @@ export function ProjectForm({ project }: ProjectFormProps) {
           <CardHeader>
             <CardTitle>Configuración económica</CardTitle>
             <CardDescription>
-              Define tu porcentaje de ganancia
+              Define tu porcentaje de ganancia (0-100%)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -462,20 +440,22 @@ export function ProjectForm({ project }: ProjectFormProps) {
           </CardContent>
         </Card>
         
-        {/* Modos de entrega */}
+        {/* Modo de entrega */}
         <Card>
           <CardHeader>
-            <CardTitle>Modos de entrega</CardTitle>
+            <CardTitle>Modo de entrega</CardTitle>
             <CardDescription>
-              Configura cómo llegarán los productos a los compradores
+              Selecciona cómo llegarán los productos a los compradores
             </CardDescription>
           </CardHeader>
           <CardContent>
             <DeliveryModesSection
-              deliveryModes={deliveryModes}
+              deliveryType={deliveryType}
+              deliveryConfig={deliveryConfig}
               disabled={isSubmitting}
               errors={errors.deliveryModes}
-              onChange={handleDeliveryModesChange}
+              onDeliveryTypeChange={handleDeliveryTypeChange}
+              onDeliveryConfigChange={handleDeliveryConfigChange}
             />
           </CardContent>
         </Card>
@@ -547,4 +527,3 @@ export function ProjectForm({ project }: ProjectFormProps) {
     </>
   )
 }
-

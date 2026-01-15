@@ -1,14 +1,19 @@
 "use client"
 
 import { useState, useRef, useCallback } from "react"
-import { Upload, X, ImageIcon, Loader2 } from "lucide-react"
+import { X, ImageIcon, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { compressImage, formatFileSize } from "@/lib/utils/image-compressor"
-import { MAX_LOGO_SIZE_MB, ALLOWED_LOGO_FORMATS } from "@/lib/types/project/types"
+import { 
+  MAX_LOGO_SIZE_MB, 
+  LOGO_COMPRESSION_THRESHOLD_MB,
+  ALLOWED_LOGO_FORMATS 
+} from "@/lib/types/project/types"
 
 interface LogoUploadProps {
-  value?: string // URL o data URL del logo
-  onChange: (dataUrl: string | undefined, fileName: string | undefined) => void
+  currentUrl?: string // URL del logo existente (del backend)
+  selectedFile?: File // Archivo seleccionado (en memoria)
+  onChange: (file: File | undefined, previewUrl: string | undefined) => void
   disabled?: boolean
   error?: string
 }
@@ -21,12 +26,24 @@ interface LogoUploadProps {
  * - Click para seleccionar
  * - Preview de imagen
  * - Compresión automática si excede 2MB
+ * - Límite máximo de 5MB (bucket)
+ * - Formatos: PNG, JPG, JPEG, WebP, SVG
  */
-export function LogoUpload({ value, onChange, disabled, error }: LogoUploadProps) {
+export function LogoUpload({ 
+  currentUrl, 
+  selectedFile,
+  onChange, 
+  disabled, 
+  error 
+}: LogoUploadProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [compressionMessage, setCompressionMessage] = useState<string>()
   const [localError, setLocalError] = useState<string>()
+  const [previewUrl, setPreviewUrl] = useState<string>()
   const inputRef = useRef<HTMLInputElement>(null)
+  
+  // URL a mostrar: preview del archivo seleccionado o URL existente
+  const displayUrl = previewUrl || currentUrl
   
   const handleFileSelect = useCallback(async (file: File) => {
     setIsProcessing(true)
@@ -47,7 +64,13 @@ export function LogoUpload({ value, onChange, disabled, error }: LogoUploadProps
         setCompressionMessage(`La imagen fue optimizada automáticamente (${originalSize} → ${finalSize})`)
       }
       
-      onChange(result.data.dataUrl, file.name)
+      // Crear File desde el dataUrl comprimido
+      const response = await fetch(result.data.dataUrl)
+      const blob = await response.blob()
+      const compressedFile = new File([blob], file.name, { type: blob.type })
+      
+      setPreviewUrl(result.data.dataUrl)
+      onChange(compressedFile, result.data.dataUrl)
     } catch (err) {
       console.error("Error processing image:", err)
       setLocalError("Error al procesar la imagen")
@@ -83,9 +106,10 @@ export function LogoUpload({ value, onChange, disabled, error }: LogoUploadProps
   }, [])
   
   const handleRemove = useCallback(() => {
-    onChange(undefined, undefined)
+    setPreviewUrl(undefined)
     setCompressionMessage(undefined)
     setLocalError(undefined)
+    onChange(undefined, undefined)
   }, [onChange])
   
   const handleClick = useCallback(() => {
@@ -108,12 +132,12 @@ export function LogoUpload({ value, onChange, disabled, error }: LogoUploadProps
         disabled={disabled || isProcessing}
       />
       
-      {value ? (
+      {displayUrl ? (
         // Preview de imagen cargada
         <div className="relative inline-block">
           <div className="w-32 h-32 rounded-lg border-2 border-border overflow-hidden bg-muted">
             <img
-              src={value}
+              src={displayUrl}
               alt="Logo del proyecto"
               className="w-full h-full object-cover"
             />
@@ -128,6 +152,12 @@ export function LogoUpload({ value, onChange, disabled, error }: LogoUploadProps
             >
               <X className="h-3 w-3" />
             </Button>
+          )}
+          {/* Indicador de archivo nuevo vs existente */}
+          {selectedFile && (
+            <span className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full">
+              Nuevo
+            </span>
           )}
         </div>
       ) : (
@@ -174,12 +204,11 @@ export function LogoUpload({ value, onChange, disabled, error }: LogoUploadProps
       )}
       
       {/* Información de formatos */}
-      {!value && !displayError && (
+      {!displayUrl && !displayError && (
         <p className="text-xs text-muted-foreground">
-          PNG, JPG o WebP. Máximo {MAX_LOGO_SIZE_MB}MB
+          PNG, JPG, WebP o SVG. Máximo {MAX_LOGO_SIZE_MB}MB (compresión automática &gt;{LOGO_COMPRESSION_THRESHOLD_MB}MB)
         </p>
       )}
     </div>
   )
 }
-
