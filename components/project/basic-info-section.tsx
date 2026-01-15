@@ -17,7 +17,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { LogoUpload } from "./logo-upload"
-import { Lock } from "lucide-react"
+import { Lock, Hash } from "lucide-react"
 import {
   PROJECT_TYPES,
   MAX_PROJECT_NAME_LENGTH,
@@ -30,7 +30,8 @@ interface BasicInfoSectionProps {
   projectType: ProjectType | undefined
   description: string
   logoUrl: string | undefined
-  logoFileName: string | undefined
+  logoFile: File | undefined
+  publicCode?: string // Solo en modo edición
   isEditMode: boolean
   disabled?: boolean
   errors?: {
@@ -42,24 +43,26 @@ interface BasicInfoSectionProps {
   onNameChange: (value: string) => void
   onProjectTypeChange: (value: ProjectType) => void
   onDescriptionChange: (value: string) => void
-  onLogoChange: (dataUrl: string | undefined, fileName: string | undefined) => void
+  onLogoChange: (file: File | undefined, previewUrl: string | undefined) => void
 }
 
 /**
  * Sección de información básica del proyecto
  * 
  * Incluye:
+ * - Logo del proyecto
+ * - Código público (solo lectura en edición)
  * - Nombre del proyecto (no editable después de creación)
  * - Tipo de proyecto
  * - Descripción corta
- * - Logo
  */
 export function BasicInfoSection({
   name,
   projectType,
   description,
   logoUrl,
-  logoFileName,
+  logoFile,
+  publicCode,
   isEditMode,
   disabled,
   errors,
@@ -74,7 +77,8 @@ export function BasicInfoSection({
       <div className="space-y-2">
         <Label>Logo del proyecto</Label>
         <LogoUpload
-          value={logoUrl}
+          currentUrl={logoUrl}
+          selectedFile={logoFile}
           onChange={onLogoChange}
           disabled={disabled}
           error={errors?.logo}
@@ -83,6 +87,34 @@ export function BasicInfoSection({
           Si no se carga logo, se asignará un avatar por defecto
         </p>
       </div>
+      
+      {/* Código público (solo en edición) */}
+      {isEditMode && publicCode && (
+        <div className="space-y-2">
+          <Label htmlFor="publicCode">Código público</Label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="relative">
+                  <Input
+                    id="publicCode"
+                    value={publicCode}
+                    disabled
+                    className="pr-10 bg-muted font-mono"
+                  />
+                  <Hash className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Código público generado automáticamente</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <p className="text-xs text-muted-foreground">
+            Este código identifica tu proyecto públicamente
+          </p>
+        </div>
+      )}
       
       {/* Nombre */}
       <div className="space-y-2">
@@ -183,4 +215,3 @@ export function BasicInfoSection({
     </div>
   )
 }
-

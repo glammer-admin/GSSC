@@ -10,20 +10,20 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { DELIVERY_PERIODICITIES } from "@/lib/types/project/types"
-import type { DeliveryPeriodicity, VenueDeliveryConfig } from "@/lib/types/project/types"
+import type { DeliveryPeriodicity, OrganizerLocationConfig } from "@/lib/types/project/types"
 
 interface DeliveryVenueConfigProps {
-  config: VenueDeliveryConfig
+  config: OrganizerLocationConfig
   disabled?: boolean
   errors?: {
     address?: string
     periodicity?: string
   }
-  onChange: (config: VenueDeliveryConfig) => void
+  onChange: (config: OrganizerLocationConfig) => void
 }
 
 /**
- * Configuración de entrega en sede del organizador
+ * Configuración de entrega en ubicación del organizador
  */
 export function DeliveryVenueConfig({
   config,
@@ -31,10 +31,8 @@ export function DeliveryVenueConfig({
   errors,
   onChange,
 }: DeliveryVenueConfigProps) {
-  if (!config.enabled) return null
-  
   return (
-    <div className="pl-8 space-y-4 border-l-2 border-muted ml-2">
+    <div className="space-y-4">
       {/* Dirección */}
       <div className="space-y-2">
         <Label htmlFor="venueAddress">
@@ -86,4 +84,3 @@ export function DeliveryVenueConfig({
     </div>
   )
 }
-

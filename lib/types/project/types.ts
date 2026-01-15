@@ -1,115 +1,186 @@
 /**
  * Tipos del dominio de Proyectos
  * 
- * Basado en spec.md - Creación y Edición de Proyecto
+ * Basado en spec.md v2.0 - Creación y Edición de Proyecto
+ * Alineado con backend Supabase (tabla glam_projects)
  */
 
-// Estado del proyecto (RN-07: Estado inicial siempre "Borrador")
+// ============================================
+// TIPOS BASE (alineados con backend)
+// ============================================
+
+/**
+ * Estado del proyecto (RN-07: Estado inicial siempre "draft")
+ */
 export type ProjectStatus = "draft" | "active" | "paused" | "finished"
 
-// Tipo de proyecto
-export type ProjectType = "team" | "institution" | "company" | "group" | "other"
-
-// Periodicidad de entrega en sede
-export type DeliveryPeriodicity = "weekly" | "biweekly" | "monthly" | "asap"
-
-// Tipo de costo de entrega a domicilio
-export type HomeDeliveryCostType = "charged" | "free"
+/**
+ * Tipo de proyecto (valores del backend)
+ */
+export type ProjectType = 
+  | "sports_team" 
+  | "educational_institution" 
+  | "company" 
+  | "group" 
+  | "other"
 
 /**
- * Configuración de entrega en sede del organizador
+ * Tipo de entrega (selección única - RN-15)
  */
-export interface VenueDeliveryConfig {
-  enabled: boolean
-  address?: string
-  periodicity?: DeliveryPeriodicity
+export type DeliveryType = 
+  | "organizer_location" 
+  | "customer_home" 
+  | "glam_urban_pickup"
+
+/**
+ * Periodicidad de entrega en sede (valores del backend)
+ */
+export type DeliveryPeriodicity = "weekly" | "biweekly" | "monthly" | "immediately"
+
+/**
+ * Tipo de costo de entrega a domicilio (valores del backend)
+ */
+export type DeliveryFeeType = "charged_to_customer" | "included_in_price"
+
+// ============================================
+// CONFIGURACIÓN DE ENTREGA (según delivery_type)
+// ============================================
+
+/**
+ * Configuración para entrega en ubicación del organizador
+ */
+export interface OrganizerLocationConfig {
+  address: string
+  periodicity: DeliveryPeriodicity
 }
 
 /**
- * Configuración de entrega a domicilio
+ * Configuración para entrega a domicilio del cliente
  */
-export interface HomeDeliveryConfig {
-  enabled: boolean
-  costType?: HomeDeliveryCostType
+export interface CustomerHomeConfig {
+  delivery_fee_type: DeliveryFeeType
+  delivery_fee_value?: number // En centavos, opcional
 }
 
 /**
- * Configuración de recolección en Glam Urban
+ * Configuración de entrega según tipo
+ * - organizer_location: OrganizerLocationConfig
+ * - customer_home: CustomerHomeConfig
+ * - glam_urban_pickup: null
  */
-export interface PickupDeliveryConfig {
-  enabled: boolean
+export type DeliveryConfig = OrganizerLocationConfig | CustomerHomeConfig | null
+
+// ============================================
+// MODELO DE PROYECTO
+// ============================================
+
+/**
+ * Proyecto del backend (glam_projects)
+ */
+export interface BackendProject {
+  id: string
+  public_code: string
+  organizer_id: string
+  name: string
+  description?: string
+  type: ProjectType
+  status: ProjectStatus
+  commission_percent: number
+  packaging_custom: boolean
+  delivery_type: DeliveryType
+  delivery_config: DeliveryConfig
+  created_at: string
+  updated_at: string
+  created_by: string
+  updated_by: string
 }
 
 /**
- * Modos de entrega del proyecto
- */
-export interface DeliveryModes {
-  venue: VenueDeliveryConfig
-  home: HomeDeliveryConfig
-  pickup: PickupDeliveryConfig
-}
-
-/**
- * Modelo completo de Proyecto
+ * Proyecto para el frontend (transformado)
  */
 export interface Project {
   id: string
+  publicCode: string
   organizerId: string
-  
-  // Información básica
   name: string
-  projectType: ProjectType
   description?: string
-  logoUrl?: string
-  
-  // Configuración económica
-  commission: number // 0-100 (RN-04)
-  
-  // Packaging
-  customPackaging: boolean
-  
-  // Modos de entrega
-  deliveryModes: DeliveryModes
-  
-  // Estado
+  projectType: ProjectType
   status: ProjectStatus
-  
-  // Metadata mock (para simular productos/pedidos)
-  hasProducts?: boolean
-  hasActiveOrders?: boolean
-  
-  // Auditoría
+  commission: number // Decimal 0-100
+  customPackaging: boolean
+  deliveryType: DeliveryType
+  deliveryConfig: DeliveryConfig
+  logoUrl?: string
   createdAt: string
   updatedAt: string
 }
 
+// ============================================
+// DTOs PARA API
+// ============================================
+
 /**
- * DTO para crear proyecto
+ * DTO para crear proyecto (POST)
+ */
+export interface CreateProjectDTO {
+  name: string
+  type: ProjectType
+  description?: string
+  status?: ProjectStatus // Default: draft
+  commission_percent: number
+  packaging_custom: boolean
+  delivery_type: DeliveryType
+  delivery_config: DeliveryConfig
+  organizer_id: string
+  created_by: string // ID del usuario que crea el proyecto (inmutable)
+  updated_by: string // ID del usuario que actualiza (inicialmente igual a created_by)
+}
+
+/**
+ * DTO para actualizar proyecto (PATCH)
+ * name NO se puede modificar (RN-02)
+ */
+export interface UpdateProjectDTO {
+  description?: string
+  type?: ProjectType
+  status?: ProjectStatus
+  commission_percent?: number
+  packaging_custom?: boolean
+  delivery_type?: DeliveryType
+  delivery_config?: DeliveryConfig
+  updated_by: string // ID del usuario que actualiza (siempre obligatorio)
+}
+
+/**
+ * Input del formulario para crear proyecto
  */
 export interface CreateProjectInput {
   name: string
   projectType: ProjectType
   description?: string
-  logoFileName?: string // En fase mock, solo el nombre del archivo
   commission: number
   customPackaging: boolean
-  deliveryModes: DeliveryModes
+  deliveryType: DeliveryType
+  deliveryConfig: DeliveryConfig
   status: ProjectStatus
 }
 
 /**
- * DTO para actualizar proyecto
+ * Input del formulario para actualizar proyecto
  */
 export interface UpdateProjectInput {
-  // name NO se puede modificar (RN-02)
-  projectType?: ProjectType
   description?: string
-  logoFileName?: string
+  projectType?: ProjectType
   commission?: number
   customPackaging?: boolean
-  deliveryModes?: DeliveryModes
+  deliveryType?: DeliveryType
+  deliveryConfig?: DeliveryConfig
   status?: ProjectStatus
 }
+
+// ============================================
+// RESPUESTAS DE API
+// ============================================
 
 /**
  * Respuesta del API al obtener proyecto
@@ -144,14 +215,23 @@ export interface ProjectListResponse {
 // ============================================
 
 /**
- * Tipos de proyecto con labels
+ * Tipos de proyecto con labels (mapeo frontend ↔ backend)
  */
 export const PROJECT_TYPES = [
-  { id: "team" as ProjectType, name: "Equipo" },
-  { id: "institution" as ProjectType, name: "Institución" },
+  { id: "sports_team" as ProjectType, name: "Equipo deportivo" },
+  { id: "educational_institution" as ProjectType, name: "Institución educativa" },
   { id: "company" as ProjectType, name: "Empresa" },
   { id: "group" as ProjectType, name: "Grupo" },
   { id: "other" as ProjectType, name: "Otro" },
+] as const
+
+/**
+ * Tipos de entrega con labels (selección única)
+ */
+export const DELIVERY_TYPES = [
+  { id: "organizer_location" as DeliveryType, name: "Ubicación del organizador" },
+  { id: "customer_home" as DeliveryType, name: "Domicilio del cliente" },
+  { id: "glam_urban_pickup" as DeliveryType, name: "Punto de retiro Glam Urban" },
 ] as const
 
 /**
@@ -161,15 +241,15 @@ export const DELIVERY_PERIODICITIES = [
   { id: "weekly" as DeliveryPeriodicity, name: "Semanal" },
   { id: "biweekly" as DeliveryPeriodicity, name: "Quincenal" },
   { id: "monthly" as DeliveryPeriodicity, name: "Mensual" },
-  { id: "asap" as DeliveryPeriodicity, name: "Lo más pronto posible" },
+  { id: "immediately" as DeliveryPeriodicity, name: "Inmediatamente" },
 ] as const
 
 /**
  * Tipos de costo de entrega a domicilio con labels
  */
-export const HOME_DELIVERY_COST_TYPES = [
-  { id: "charged" as HomeDeliveryCostType, name: "Se cobra el domicilio al cliente" },
-  { id: "free" as HomeDeliveryCostType, name: "Entrega gratis" },
+export const DELIVERY_FEE_TYPES = [
+  { id: "charged_to_customer" as DeliveryFeeType, name: "Se cobra el domicilio al cliente" },
+  { id: "included_in_price" as DeliveryFeeType, name: "Entrega gratis (incluido en precio)" },
 ] as const
 
 /**
@@ -208,6 +288,10 @@ export const VALID_STATUS_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = 
   finished: [], // No puede transicionar a ningún estado
 }
 
+// ============================================
+// FUNCIONES DE VALIDACIÓN
+// ============================================
+
 /**
  * Verifica si una transición de estado es válida
  */
@@ -231,19 +315,34 @@ export function getAvailableStatusTransitions(currentStatus: ProjectStatus): Pro
 // ============================================
 
 /**
- * Formatos de imagen permitidos para logo (RN-11)
+ * Nombre del bucket de Storage para logos
  */
-export const ALLOWED_LOGO_FORMATS = ["png", "jpg", "jpeg", "webp"] as const
+export const PROJECT_LOGOS_BUCKET = "project-logos"
 
 /**
- * Tamaño máximo de logo en bytes (RN-12: 2MB)
+ * Formatos de imagen permitidos para logo (RN-11)
  */
-export const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024 // 2MB
+export const ALLOWED_LOGO_FORMATS = ["png", "jpg", "jpeg", "webp", "svg"] as const
+
+/**
+ * Tamaño máximo de logo para compresión automática (2MB)
+ */
+export const LOGO_COMPRESSION_THRESHOLD_BYTES = 2 * 1024 * 1024
+
+/**
+ * Tamaño máximo de logo en bytes (límite del bucket: 5MB)
+ */
+export const MAX_LOGO_SIZE_BYTES = 5 * 1024 * 1024
 
 /**
  * Tamaño máximo de logo en MB para mostrar al usuario
  */
-export const MAX_LOGO_SIZE_MB = 2
+export const MAX_LOGO_SIZE_MB = 5
+
+/**
+ * Tamaño para compresión en MB
+ */
+export const LOGO_COMPRESSION_THRESHOLD_MB = 2
 
 /**
  * Longitud máxima del nombre del proyecto (RN-03)
@@ -282,15 +381,15 @@ export function validateProjectName(name: string): { valid: boolean; error?: str
 }
 
 /**
- * Valida la comisión (RN-04)
+ * Valida la comisión (RN-04: decimal 0-100)
  */
 export function validateCommission(commission: number | undefined): { valid: boolean; error?: string } {
   if (commission === undefined || commission === null) {
     return { valid: false, error: "La comisión es obligatoria" }
   }
   
-  if (!Number.isInteger(commission)) {
-    return { valid: false, error: "La comisión debe ser un número entero" }
+  if (typeof commission !== "number" || isNaN(commission)) {
+    return { valid: false, error: "La comisión debe ser un número" }
   }
   
   if (commission < 0 || commission > 100) {
@@ -301,14 +400,10 @@ export function validateCommission(commission: number | undefined): { valid: boo
 }
 
 /**
- * Verifica si el proyecto tiene al menos un modo de entrega habilitado
+ * Verifica si el proyecto tiene un modo de entrega configurado
  */
-export function hasDeliveryMode(deliveryModes: DeliveryModes): boolean {
-  return (
-    deliveryModes.venue.enabled ||
-    deliveryModes.home.enabled ||
-    deliveryModes.pickup.enabled
-  )
+export function hasDeliveryType(deliveryType: DeliveryType | undefined): boolean {
+  return !!deliveryType
 }
 
 /**
@@ -329,8 +424,8 @@ export function canActivateProject(project: Partial<CreateProjectInput>): { vali
     errors.push("Debe definir la comisión para activar el proyecto")
   }
   
-  if (!project.deliveryModes || !hasDeliveryMode(project.deliveryModes)) {
-    errors.push("Debe seleccionar al menos un modo de entrega para activar el proyecto")
+  if (!project.deliveryType) {
+    errors.push("Debe seleccionar un modo de entrega para activar el proyecto")
   }
   
   return {
@@ -339,12 +434,92 @@ export function canActivateProject(project: Partial<CreateProjectInput>): { vali
   }
 }
 
+// ============================================
+// FUNCIONES DE TRANSFORMACIÓN
+// ============================================
+
 /**
- * Modos de entrega por defecto (todos deshabilitados)
+ * Transforma proyecto del backend al frontend
  */
-export const DEFAULT_DELIVERY_MODES: DeliveryModes = {
-  venue: { enabled: false },
-  home: { enabled: false },
-  pickup: { enabled: false },
+export function toProject(backend: BackendProject, logoUrl?: string): Project {
+  return {
+    id: backend.id,
+    publicCode: backend.public_code,
+    organizerId: backend.organizer_id,
+    name: backend.name,
+    description: backend.description,
+    projectType: backend.type,
+    status: backend.status,
+    commission: backend.commission_percent,
+    customPackaging: backend.packaging_custom,
+    deliveryType: backend.delivery_type,
+    deliveryConfig: backend.delivery_config,
+    logoUrl,
+    createdAt: backend.created_at,
+    updatedAt: backend.updated_at,
+  }
 }
 
+/**
+ * Transforma input del formulario a DTO para crear
+ * @param input - Input del formulario
+ * @param organizerId - ID del organizador dueño del proyecto
+ * @param userId - ID del usuario logueado (quien crea el proyecto)
+ */
+export function toCreateDTO(input: CreateProjectInput, organizerId: string, userId: string): CreateProjectDTO {
+  return {
+    name: input.name.trim(),
+    type: input.projectType,
+    description: input.description?.trim(),
+    status: input.status,
+    commission_percent: input.commission,
+    packaging_custom: input.customPackaging,
+    delivery_type: input.deliveryType,
+    delivery_config: input.deliveryConfig,
+    organizer_id: organizerId,
+    created_by: userId,
+    updated_by: userId,
+  }
+}
+
+/**
+ * Transforma input del formulario a DTO para actualizar
+ * @param input - Input del formulario
+ * @param userId - ID del usuario logueado (quien actualiza el proyecto)
+ */
+export function toUpdateDTO(input: UpdateProjectInput, userId: string): UpdateProjectDTO {
+  const dto: UpdateProjectDTO = {
+    updated_by: userId, // Siempre se actualiza con el usuario logueado
+  }
+  
+  if (input.description !== undefined) {
+    dto.description = input.description?.trim()
+  }
+  if (input.projectType !== undefined) {
+    dto.type = input.projectType
+  }
+  if (input.status !== undefined) {
+    dto.status = input.status
+  }
+  if (input.commission !== undefined) {
+    dto.commission_percent = input.commission
+  }
+  if (input.customPackaging !== undefined) {
+    dto.packaging_custom = input.customPackaging
+  }
+  if (input.deliveryType !== undefined) {
+    dto.delivery_type = input.deliveryType
+  }
+  if (input.deliveryConfig !== undefined) {
+    dto.delivery_config = input.deliveryConfig
+  }
+  
+  return dto
+}
+
+/**
+ * Construye la URL pública del logo
+ */
+export function getLogoPublicUrl(baseUrl: string, projectId: string, extension: string): string {
+  return `${baseUrl}/storage/v1/object/public/${PROJECT_LOGOS_BUCKET}/${projectId}/logo.${extension}`
+}
