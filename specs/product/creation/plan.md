@@ -1,0 +1,483 @@
+# Plan de Implementación – Creación de Productos
+
+> **Documento técnico de implementación**  
+> Basado en `spec.md` v1.0  
+> Define **CÓMO** se implementará el sistema
+
+---
+
+## 1. Resumen de arquitectura
+
+### 1.1 Principios técnicos
+
+- **Server-Side Rendering (SSR)**: Toda la lógica de negocio y validación en el servidor
+- **Patrón existente**: Seguir estructura de `lib/http/project/` y `lib/types/project/`
+- **Cliente HTTP solo servidor**: Nunca importar clientes HTTP en componentes `"use client"`
+- **Storage reutilizable**: Crear cliente de Storage siguiendo patrón de `project-storage-client.ts`
+
+### 1.2 Estructura de archivos a crear
+
+```
+lib/
+├── http/
+│   └── product/
+│       ├── index.ts                    # Re-exports
+│       ├── product-client.ts           # Cliente HTTP para productos
+│       ├── product-storage-client.ts   # Cliente Storage para imágenes
+│       ├── category-client.ts          # Cliente HTTP para categorías (solo lectura)
+│       └── types.ts                    # Re-export de tipos
+├── types/
+│   └── product/
+│       └── types.ts                    # Tipos del dominio de productos
+└── utils/
+    └── image-compressor.ts             # (Reutilizar existente)
+
+app/
+├── api/
+│   └── product/
+│       ├── route.ts                    # POST crear, GET listar
+│       ├── [id]/
+│       │   └── route.ts                # GET, PATCH, DELETE producto
+│       └── [id]/
+│           └── images/
+│               └── route.ts            # POST subir, DELETE eliminar imagen
+└── project/
+    └── [id]/
+        └── products/
+            ├── page.tsx                # Lista de productos del proyecto
+            ├── new/
+            │   └── page.tsx            # Formulario creación
+            └── [productId]/
+                └── edit/
+                    └── page.tsx        # Formulario edición
+
+components/
+└── product/
+    ├── product-form.tsx                # Formulario principal (Client Component)
+    ├── category-selector.tsx           # Selector de categoría
+    ├── personalization-config.tsx      # Configurador de módulos
+    ├── image-manager.tsx               # Gestor de imágenes
+    ├── image-upload.tsx                # Componente de subida
+    ├── image-gallery.tsx               # Galería con reordenamiento
+    ├── status-section.tsx              # Sección de estado
+    └── visual-mode-selector.tsx        # Selector de modo visual
+```
+
+---
+
+## 2. Fases de implementación
+
+### Fase 1: Tipos y Cliente HTTP (Fundamentos)
+
+**Objetivo**: Establecer la base de tipos y comunicación con backend
+
+#### 2.1.1 Crear tipos del dominio (`lib/types/product/types.ts`)
+
+```typescript
+// Tipos base (alineados con backend)
+export type ProductStatus = "draft" | "active" | "inactive"
+export type VisualMode = "upload_images" | "online_editor" | "designer_assisted"
+export type PersonalizationModuleCode = "sizes" | "numbers" | "names" | "age_categories"
+export type ProductImageSource = "upload" | "online_editor" | "designer_assisted"
+
+// Interfaces de backend
+export interface BackendProductCategory { ... }
+export interface BackendPersonalizationModule { ... }
+export interface BackendProduct { ... }
+export interface BackendProductImage { ... }
+
+// Interfaces de frontend
+export interface ProductCategory { ... }
+export interface PersonalizationModule { ... }
+export interface Product { ... }
+export interface ProductImage { ... }
+
+// DTOs
+export interface CreateProductDTO { ... }
+export interface UpdateProductDTO { ... }
+export interface CreateProductImageDTO { ... }
+
+// Configuración de personalización
+export interface SizesConfig { enabled: boolean; options: string[]; price_modifier: number }
+export interface NumbersConfig { enabled: boolean; min: number; max: number; price_modifier: number }
+export interface NamesConfig { enabled: boolean; max_length: number; price_modifier: number }
+export interface AgeCategoriesConfig { enabled: boolean; options: string[]; price_modifier: number }
+export interface PersonalizationConfig { ... }
+
+// Constantes
+export const PRODUCT_IMAGES_BUCKET = "product-images"
+export const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+export const MIN_IMAGES_FOR_ACTIVATION = 3
+export const ALLOWED_IMAGE_FORMATS = ["png", "jpg", "jpeg", "webp"]
+
+// Validaciones
+export function validateProductName(name: string): { valid: boolean; error?: string }
+export function validateBasePrice(price: number): { valid: boolean; error?: string }
+export function canActivateProduct(product: Product): { valid: boolean; errors: string[] }
+export function isValidStatusTransition(current: ProductStatus, next: ProductStatus): boolean
+
+// Transformaciones
+export function toProduct(backend: BackendProduct): Product
+export function toCreateDTO(input: CreateProductInput, projectId: string): CreateProductDTO
+export function toUpdateDTO(input: UpdateProductInput): UpdateProductDTO
+```
+
+#### 2.1.2 Crear cliente HTTP de productos (`lib/http/product/product-client.ts`)
+
+Seguir patrón de `project-client.ts`:
+
+```typescript
+class ProductClient {
+  // Categorías (solo lectura)
+  async getCategories(): Promise<ProductCategory[]>
+  async getCategoryByCode(code: string): Promise<ProductCategory | null>
+  
+  // Módulos (solo lectura)
+  async getPersonalizationModules(): Promise<PersonalizationModule[]>
+  
+  // Productos CRUD
+  async createProduct(dto: CreateProductDTO): Promise<BackendProduct>
+  async getProduct(id: string): Promise<BackendProduct | null>
+  async getProductsByProject(projectId: string): Promise<BackendProduct[]>
+  async updateProduct(id: string, dto: UpdateProductDTO): Promise<BackendProduct>
+  
+  // Imágenes
+  async getProductImages(productId: string): Promise<BackendProductImage[]>
+  async createProductImage(dto: CreateProductImageDTO): Promise<BackendProductImage>
+  async updateProductImage(id: string, position: number): Promise<BackendProductImage>
+  async deleteProductImage(id: string): Promise<boolean>
+}
+
+// Singleton
+export function getProductClient(): ProductClient
+```
+
+#### 2.1.3 Crear cliente Storage de imágenes (`lib/http/product/product-storage-client.ts`)
+
+Seguir patrón de `project-storage-client.ts`:
+
+```typescript
+class ProductStorageClient {
+  private bucket = PRODUCT_IMAGES_BUCKET
+  
+  // Construir path: {project_id}/{product_id}/{position}.{extension}
+  private buildPath(projectId: string, productId: string, position: number, extension: string): string
+  
+  // URL pública
+  getPublicUrl(projectId: string, productId: string, position: number, extension: string): string
+  
+  // Operaciones
+  async uploadImage(projectId: string, productId: string, position: number, file: Buffer, filename: string): Promise<ImageUploadResult>
+  async deleteImage(projectId: string, productId: string, position: number, extension: string): Promise<boolean>
+  async listProductImages(projectId: string, productId: string): Promise<string[]>
+}
+
+export function getProductStorageClient(): ProductStorageClient
+```
+
+---
+
+### Fase 2: API Routes
+
+**Objetivo**: Crear endpoints para operaciones de productos
+
+#### 2.2.1 API de productos (`app/api/product/route.ts`)
+
+```typescript
+// POST /api/product - Crear producto
+// - Validar sesión y rol organizador
+// - Validar que el usuario es dueño del proyecto
+// - Validar categoría existe
+// - Validar módulos están permitidos por categoría
+// - Crear producto en estado draft
+
+// GET /api/product?projectId=xxx - Listar productos del proyecto
+// - Validar sesión
+// - Validar permisos sobre el proyecto
+// - Retornar productos con imágenes
+```
+
+#### 2.2.2 API de producto individual (`app/api/product/[id]/route.ts`)
+
+```typescript
+// GET /api/product/[id] - Obtener producto
+// PATCH /api/product/[id] - Actualizar producto
+// - Si status cambia a active, validar mínimo 3 imágenes
+// - Si producto no es draft, rechazar cambios a personalization_config
+```
+
+#### 2.2.3 API de imágenes (`app/api/product/[id]/images/route.ts`)
+
+```typescript
+// POST /api/product/[id]/images - Subir imagen
+// - Validar formato y tamaño
+// - Subir a Storage
+// - Crear registro en product_images
+// - Asignar siguiente posición disponible
+
+// DELETE /api/product/[id]/images/[imageId] - Eliminar imagen
+// - Si producto active, validar que no quede con < 3 imágenes
+// - Eliminar de Storage
+// - Eliminar registro
+```
+
+---
+
+### Fase 3: Páginas SSR
+
+**Objetivo**: Crear páginas de gestión de productos
+
+#### 2.3.1 Lista de productos (`app/project/[id]/products/page.tsx`)
+
+- Server Component
+- Validar sesión y permisos
+- Obtener productos del proyecto
+- Renderizar tabla/grid de productos con estado, imágenes, acciones
+
+#### 2.3.2 Crear producto (`app/project/[id]/products/new/page.tsx`)
+
+- Server Component
+- Validar sesión y permisos
+- Obtener categorías y módulos
+- Renderizar formulario (Client Component)
+
+#### 2.3.3 Editar producto (`app/project/[id]/products/[productId]/edit/page.tsx`)
+
+- Server Component
+- Validar sesión y permisos
+- Obtener producto con imágenes
+- Verificar si configuración es editable (draft vs active)
+- Renderizar formulario con datos
+
+---
+
+### Fase 4: Componentes de UI
+
+**Objetivo**: Crear componentes del formulario de productos
+
+#### 2.4.1 Formulario principal (`components/product/product-form.tsx`)
+
+- Client Component (`"use client"`)
+- Maneja estado del formulario
+- Secciones: Categoría → Info básica → Personalización → Imágenes → Estado
+- Validaciones en tiempo real
+- Submit a API Routes
+
+#### 2.4.2 Selector de categoría (`components/product/category-selector.tsx`)
+
+- Muestra categorías disponibles
+- Al seleccionar, actualiza módulos permitidos
+- Advertencia si cambia categoría con módulos configurados
+
+#### 2.4.3 Configurador de personalización (`components/product/personalization-config.tsx`)
+
+- Muestra módulos permitidos por categoría
+- Toggle para habilitar/deshabilitar cada módulo
+- Configuración específica por módulo:
+  - sizes: selector múltiple de opciones
+  - numbers: rango min/max
+  - names: longitud máxima
+  - age_categories: selector múltiple
+- Deshabilitado si producto no es draft
+
+#### 2.4.4 Gestor de imágenes (`components/product/image-manager.tsx`)
+
+- Selector de modo visual (si categoría permite múltiples)
+- Upload Images: componente de subida + galería
+- Online Editor: botón que redirige a URL externa
+- Designer Assisted: mensaje informativo
+
+#### 2.4.5 Componente de subida (`components/product/image-upload.tsx`)
+
+- Drag & drop o click para seleccionar
+- Validación de formato y tamaño
+- Compresión si necesario (reutilizar `image-compressor.ts`)
+- Preview antes de subir
+- Progress indicator
+
+#### 2.4.6 Galería de imágenes (`components/product/image-gallery.tsx`)
+
+- Grid de imágenes con posición
+- Drag & drop para reordenar
+- Botón eliminar (con validación de mínimo)
+- Indicador de imagen principal (posición 1)
+
+#### 2.4.7 Sección de estado (`components/product/status-section.tsx`)
+
+- Muestra estado actual con badge de color
+- Botones de acción según transiciones válidas
+- Modal de confirmación para activar/desactivar
+- Validación de requisitos para activación
+
+---
+
+## 3. Dependencias entre tareas
+
+```
+Fase 1 (Fundamentos)
+├── 1.1 Tipos ──────────────────┐
+├── 1.2 Cliente HTTP ───────────┼──► Fase 2 (APIs)
+└── 1.3 Cliente Storage ────────┘    ├── 2.1 API productos
+                                     ├── 2.2 API producto [id]
+                                     └── 2.3 API imágenes
+                                              │
+                                              ▼
+                                     Fase 3 (Páginas SSR)
+                                     ├── 3.1 Lista productos
+                                     ├── 3.2 Crear producto
+                                     └── 3.3 Editar producto
+                                              │
+                                              ▼
+                                     Fase 4 (Componentes UI)
+                                     ├── 4.1 Formulario principal
+                                     ├── 4.2 Selector categoría
+                                     ├── 4.3 Config personalización
+                                     ├── 4.4 Gestor imágenes
+                                     ├── 4.5 Upload imágenes
+                                     ├── 4.6 Galería imágenes
+                                     └── 4.7 Sección estado
+```
+
+---
+
+## 4. Consideraciones técnicas
+
+### 4.1 Validaciones
+
+| Validación | Ubicación | Momento |
+|------------|-----------|---------|
+| Nombre no vacío | Cliente + Servidor | Submit |
+| Precio > 0 | Cliente + Servidor | Submit |
+| Módulos permitidos por categoría | Servidor | Submit |
+| Mínimo 3 imágenes para activar | Servidor | Cambio de estado |
+| Permisos de organizador | Servidor (Middleware + API) | Cada request |
+| Formato/tamaño imagen | Cliente + Servidor | Upload |
+| Transición de estado válida | Servidor | Cambio de estado |
+| Config inmutable si no draft | Servidor | Update |
+
+### 4.2 Manejo de errores
+
+Usar códigos de error definidos en spec:
+- `PRODUCT_NAME_REQUIRED`
+- `PRODUCT_PRICE_INVALID`
+- `CATEGORY_NOT_FOUND`
+- `MODULE_NOT_ALLOWED`
+- `PROJECT_NOT_FOUND`
+- `PERMISSION_DENIED`
+- `CONFIG_IMMUTABLE`
+- `INVALID_STATUS_TRANSITION`
+- `INSUFFICIENT_IMAGES`
+- `INVALID_IMAGE_FORMAT`
+- `IMAGE_TOO_LARGE`
+- `MIN_IMAGES_REQUIRED`
+
+### 4.3 Transacciones y rollback
+
+Para subida de imágenes:
+1. Subir a Storage
+2. Si éxito, crear registro en BD
+3. Si falla BD, eliminar de Storage
+
+Para eliminación de imágenes:
+1. Eliminar registro de BD
+2. Si éxito, eliminar de Storage
+3. Si falla Storage, log warning (archivo huérfano)
+
+### 4.4 Reutilización de código
+
+| Componente existente | Uso en productos |
+|---------------------|------------------|
+| `lib/utils/image-compressor.ts` | Compresión de imágenes de producto |
+| `lib/http/client.ts` | Base para ProductClient |
+| `components/ui/*` | Todos los componentes de UI base |
+| `lib/auth/server-utils.ts` | Validación de sesión en páginas |
+
+### 4.5 URLs del Online Editor
+
+La URL del Online Editor se construirá como:
+```
+{ONLINE_EDITOR_BASE_URL}?productId={product_id}
+```
+
+Donde `ONLINE_EDITOR_BASE_URL` será una variable de entorno (por definir).
+
+---
+
+## 5. Testing
+
+### 5.1 Tests unitarios
+
+- Validaciones de tipos (`types.ts`)
+- Transformaciones backend ↔ frontend
+- Lógica de transiciones de estado
+
+### 5.2 Tests de integración
+
+- API Routes con mocks de BD
+- Flujo completo de creación de producto
+- Flujo de subida de imágenes
+
+### 5.3 Tests E2E (si aplica)
+
+- Crear producto completo con imágenes
+- Activar producto
+- Editar producto activo (verificar restricciones)
+
+---
+
+## 6. Checklist de implementación
+
+### Fase 1: Tipos y Clientes
+- [ ] Crear `lib/types/product/types.ts`
+- [ ] Crear `lib/http/product/product-client.ts`
+- [ ] Crear `lib/http/product/product-storage-client.ts`
+- [ ] Crear `lib/http/product/index.ts` (re-exports)
+
+### Fase 2: API Routes
+- [ ] Crear `app/api/product/route.ts`
+- [ ] Crear `app/api/product/[id]/route.ts`
+- [ ] Crear `app/api/product/[id]/images/route.ts`
+
+### Fase 3: Páginas
+- [ ] Crear `app/project/[id]/products/page.tsx`
+- [ ] Crear `app/project/[id]/products/new/page.tsx`
+- [ ] Crear `app/project/[id]/products/[productId]/edit/page.tsx`
+
+### Fase 4: Componentes
+- [ ] Crear `components/product/product-form.tsx`
+- [ ] Crear `components/product/category-selector.tsx`
+- [ ] Crear `components/product/personalization-config.tsx`
+- [ ] Crear `components/product/image-manager.tsx`
+- [ ] Crear `components/product/image-upload.tsx`
+- [ ] Crear `components/product/image-gallery.tsx`
+- [ ] Crear `components/product/status-section.tsx`
+- [ ] Crear `components/product/visual-mode-selector.tsx`
+
+### Integración
+- [ ] Agregar enlace a productos desde dashboard de proyecto
+- [ ] Agregar navegación en sidebar/menú
+- [ ] Probar flujo completo E2E
+
+---
+
+## 7. Estimación de esfuerzo
+
+| Fase | Tareas | Estimación |
+|------|--------|------------|
+| Fase 1 | Tipos y Clientes | 4-6 horas |
+| Fase 2 | API Routes | 4-6 horas |
+| Fase 3 | Páginas SSR | 3-4 horas |
+| Fase 4 | Componentes UI | 8-12 horas |
+| Testing | Unit + Integration | 4-6 horas |
+| **Total** | | **23-34 horas** |
+
+---
+
+## 8. Notas para AI Agent
+
+1. **Orden de implementación**: Seguir las fases en orden (1 → 2 → 3 → 4)
+2. **No saltar pasos**: Cada fase depende de la anterior
+3. **Validar en servidor**: Toda validación crítica DEBE estar en el servidor
+4. **Patrones existentes**: Revisar código existente antes de crear nuevo
+5. **No sobre-ingeniería**: Implementar solo lo especificado en spec.md
+6. **Preguntar dudas**: Si algo no está claro, preguntar antes de implementar

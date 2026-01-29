@@ -25,6 +25,21 @@ export type BackendCreateResponse<T> = T[]
 export type BackendUpdateResponse<T> = T[]
 
 /**
+ * Fila de la vista project_sales_summary (resumen de ventas por proyecto).
+ * Solo ventas confirmadas (paid). Fuente: specs/sells/sells-curl-example.md
+ */
+export interface ProjectSalesSummaryRow {
+  project_public_code: string
+  project_name: string
+  project_status: string
+  orders_count: number
+  units_sold: number
+  organizer_commission_total: number
+  currency: string | null
+  last_sale_at: string | null
+}
+
+/**
  * Re-export de tipos del dominio para conveniencia
  */
 export type {

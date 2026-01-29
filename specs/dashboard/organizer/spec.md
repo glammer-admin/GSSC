@@ -40,6 +40,7 @@ El Dashboard del Organizador es la pantalla de aterrizaje posterior al login par
 ## 2. Alcance funcional
 
 ### 2.1 Incluye
+- Menú de navegación principal con ítems específicos para el rol organizador
 - Métricas globales agregadas (no por proyecto individual)
 - Visualización de comisión del organizador en distintos periodos
 - Métricas volumétricas: unidades, productos y pedidos
@@ -107,6 +108,8 @@ Cada regla debe ser:
 - **RN-08:** La única acción primaria disponible es la creación de nuevos proyectos.
 - **RN-09:** El detalle por proyecto individual se realiza navegando fuera de este dashboard.
 - **RN-10:** Los estados válidos de un proyecto son: activo, pausado, finalizado.
+- **RN-11:** El menú principal de navegación del Organizador incluye ÚNICAMENTE: Dashboard, Pagos y Configuración. NO incluye un ítem "Proyectos" directo.
+- **RN-12:** El acceso a proyectos para el Organizador se realiza exclusivamente desde el Dashboard, a través de la sección de resumen de proyectos.
 
 ---
 
@@ -425,6 +428,48 @@ Feature: Visualización de KPIs ejecutivos
 
 ---
 
+### 7.8 Caso de uso: Menú Principal de Navegación
+
+```gherkin
+Feature: Menú principal de navegación del Organizador
+  Como organizador
+  Quiero ver un menú de navegación adaptado a mi rol
+  Para acceder rápidamente a las secciones relevantes de la plataforma
+
+  Background:
+    Given el usuario está autenticado con rol "organizer"
+
+  Scenario: Visualización del menú principal del organizador
+    Given el organizador accede a cualquier pantalla de la plataforma
+    When se muestra el menú principal de navegación
+    Then el menú contiene los siguientes ítems:
+      | Ítem          | Destino            |
+      | Dashboard     | /dashboard         |
+      | Pagos         | /dashboard/payments|
+      | Configuración | /settings/billing  |
+    And NO aparece un ítem "Proyectos" en el menú principal
+
+  Scenario: Acceso a proyectos desde el Dashboard
+    Given el organizador está en el Dashboard
+    When quiere acceder a un proyecto específico
+    Then debe navegar a través de la sección de resumen de proyectos del Dashboard
+    And seleccionar el proyecto deseado para ver su detalle
+
+  Scenario: Menú NO incluye Proyectos como ítem directo
+    Given el organizador está viendo el menú principal
+    When observa las opciones disponibles
+    Then NO existe un ítem de menú llamado "Proyectos"
+    And el acceso a proyectos se realiza únicamente desde el Dashboard
+
+  Scenario: Ruta por defecto del organizador
+    Given el organizador inicia sesión en la plataforma
+    When el login es exitoso
+    Then es redirigido al Dashboard como pantalla de aterrizaje
+    And el Dashboard es la ruta por defecto para el rol organizador
+```
+
+---
+
 ## 8. Contratos funcionales (conceptuales)
 
 > Describe QUÉ entra y QUÉ sale, sin definir formato técnico.
@@ -478,6 +523,7 @@ Feature: Visualización de KPIs ejecutivos
 - Las métricas SIEMPRE corresponden al periodo seleccionado.
 - La búsqueda SOLO filtra por proyectos, nunca por productos, pedidos o compradores.
 - Las gráficas NUNCA permiten drill-down o navegación interactiva.
+- El menú principal del Organizador NUNCA incluye un ítem directo "Proyectos"; el acceso es siempre vía Dashboard.
 
 ---
 
@@ -520,14 +566,18 @@ Feature: Visualización de KPIs ejecutivos
 - NO implementar filtros por proyecto individual dentro del dashboard
 - NO implementar stock, inventarios o disponibilidad
 - NO implementar flujos de devoluciones, cambios o incidencias
+- NO agregar ítem "Proyectos" en el menú principal del Organizador (el acceso es vía Dashboard)
 
 ---
 
 ## 13. Versionado
 
-- Versión: v1.0
-- Fecha: 2024-12-15
-- Cambios: Versión inicial del spec
+- Versión: v1.1
+- Fecha: 2025-01-29
+- Cambios: Se agrega especificación del menú principal de navegación del Organizador (RN-11, RN-12, caso de uso 7.8). Se explicita que el menú NO incluye ítem "Proyectos".
+
+### Historial
+- v1.0 (2024-12-15): Versión inicial del spec
 
 ---
 

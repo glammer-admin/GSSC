@@ -41,12 +41,6 @@
           "href": "/dashboard"
         },
         {
-          "id": "proyectos",
-          "icon": "FileText",
-          "label": "Proyectos",
-          "href": "/dashboard/projects"
-        },
-        {
           "id": "pagos",
           "icon": "DollarSign",
           "label": "Pagos",
