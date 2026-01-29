@@ -64,10 +64,15 @@ export function ClientNavbar({ user }: ClientNavbarProps) {
   }
 
   return (
+    <>
+    {/* Spacer para reservar espacio del sidebar fijo */}
+    <div className={`${isExpanded ? "w-64" : "w-20"} shrink-0 transition-all duration-300 ease-in-out`} />
+    
+    {/* Sidebar fijo */}
     <nav
       className={`${
         isExpanded ? "w-64" : "w-20"
-      } bg-card border-r border-border transition-all duration-300 ease-in-out flex flex-col`}
+      } fixed top-0 left-0 bottom-0 bg-card border-r border-border transition-all duration-300 ease-in-out flex flex-col z-50`}
     >
       {/* Header con toggle */}
       <div className="p-4 border-b border-border flex items-center justify-between">
@@ -88,8 +93,8 @@ export function ClientNavbar({ user }: ClientNavbarProps) {
         </Button>
       </div>
 
-      {/* Navigation Items */}
-      <div className="flex-1 p-4 space-y-2">
+      {/* Navigation Items - crece para empujar footer al bottom */}
+      <div className="flex-1 p-4 space-y-2 overflow-y-auto">
         {navigationItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
@@ -112,7 +117,7 @@ export function ClientNavbar({ user }: ClientNavbarProps) {
         })}
       </div>
 
-      {/* User Info */}
+      {/* User Info - pegado al bottom */}
       <div className="p-4 border-t border-border space-y-4">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10">
@@ -144,6 +149,7 @@ export function ClientNavbar({ user }: ClientNavbarProps) {
         </Button>
       </div>
     </nav>
+    </>
   )
 }
 

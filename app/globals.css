@@ -4,40 +4,56 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Updated to light mode with brand colors */
-  --background: #f5f5df;
-  --foreground: #000;
-  --card: #fff;
-  --card-foreground: #000;
-  --popover: #fff;
-  --popover-foreground: #000;
-  --primary: #556b2f;
-  --primary-foreground: #fff;
-  --secondary: #155465;
-  --secondary-foreground: #fff;
-  --muted: #f6b717;
-  --muted-foreground: #000;
-  --accent: #f6b717;
-  --accent-foreground: #000;
-  --destructive: #ef4444;
-  --destructive-foreground: #fff;
-  --border: #556b2f;
-  --input: #f5f5df;
-  --ring: #155465;
-  --chart-1: #556b2f;
-  --chart-2: #155465;
-  --chart-3: #f6b717;
-  --chart-4: #f5f5df;
-  --chart-5: #000;
+  /* === FONDOS === */
+  --background: #ffffff;           /* Blanco puro - fondo principal */
+  --foreground: #1a1a1a;           /* Negro suave - texto principal */
+  
+  /* Cards y popovers */
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+  
+  /* === COLORES DE MARCA === */
+  --primary: #556b2f;              /* Verde oliva - botones principales, links */
+  --primary-foreground: #ffffff;
+  
+  --secondary: #155465;            /* Teal - botones secundarios, badges */
+  --secondary-foreground: #ffffff;
+  
+  --accent: #f6b717;               /* Amarillo - highlights, notificaciones */
+  --accent-foreground: #1a1a1a;
+  
+  /* === ELEMENTOS NEUTROS (formularios) === */
+  --muted: #f5f5f5;                /* Gris muy claro para fondos deshabilitados */
+  --muted-foreground: #737373;     /* Gris medio para placeholders */
+  
+  --border: #e5e5e5;               /* Gris claro para bordes */
+  --input: #d4d4d4;                /* Gris para bordes de inputs */
+  --ring: #556b2f;                 /* Verde para focus ring */
+  
+  /* === ESTADOS === */
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  
+  /* === CHARTS (usando colores de marca) === */
+  --chart-1: #556b2f;              /* Verde */
+  --chart-2: #155465;              /* Teal */
+  --chart-3: #f6b717;              /* Amarillo */
+  --chart-4: #f5f5df;              /* Beige */
+  --chart-5: #1a1a1a;              /* Negro */
+  
   --radius: 0.625rem;
-  --sidebar: #f5f5df;
-  --sidebar-foreground: #000;
-  --sidebar-primary: #556b2f;
-  --sidebar-primary-foreground: #fff;
-  --sidebar-accent: #f6b717;
-  --sidebar-accent-foreground: #000;
-  --sidebar-border: #556b2f;
-  --sidebar-ring: #155465;
+  
+  /* === SIDEBAR (con color de marca verde) === */
+  --sidebar: #556b2f;              /* Verde oliva como fondo de sidebar */
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #f6b717;      /* Amarillo para items activos */
+  --sidebar-primary-foreground: #1a1a1a;
+  --sidebar-accent: #6b8a3a;       /* Verde más claro para hover */
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #4a5f29;       /* Verde más oscuro para bordes */
+  --sidebar-ring: #f6b717;
 }
 
 .dark {
