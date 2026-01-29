@@ -63,13 +63,6 @@ export const menuConfig: MenuConfig = {
       roles: ["organizer"],
     },
     {
-      id: "proyectos",
-      icon: FileText,
-      label: "Proyectos",
-      href: "/dashboard/projects",
-      roles: ["organizer"],
-    },
-    {
       id: "pagos",
       icon: DollarSign,
       label: "Pagos",

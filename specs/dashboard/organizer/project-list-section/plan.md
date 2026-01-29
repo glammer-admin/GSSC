@@ -24,7 +24,7 @@ Conectar la tabla "Mis proyectos" del dashboard organizador con los datos reales
 ### 2.1 Incluye
 - Obtener el listado de proyectos con resumen de ventas desde `project_sales_summary` (GET con JWT del organizador).
 - Mapear la respuesta del backend al modelo que ya consume la tabla (`Project` con `name`, `status`, `metrics.orders`, `metrics.unitsSold`, `metrics.commission`).
-- Usar `project_public_code` para la URL de navegación al detalle (`/dashboard/project/{project_public_code}`).
+- Usar `project_public_code` para la URL de navegación al detalle (`/project/{project_public_code}`).
 - Carga de datos en el Server Component del dashboard; sin llamadas desde Client Components.
 - Manejo de errores de red/HTTP y estado vacío (lista vacía).
 

@@ -137,12 +137,12 @@ Valor total de comisión generada para el organizador.
 Al hacer clic sobre una fila completa:
 
 ```
-/dashboard/project/{project_public_code}
+/project/{project_public_code}
 ```
 
 Ejemplo:
 ```
-/dashboard/project/proj-001
+/project/proj-001
 ```
 
 ---

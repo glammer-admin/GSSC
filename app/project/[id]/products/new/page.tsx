@@ -16,13 +16,17 @@ interface NewProductPageProps {
 /**
  * Obtiene el proyecto y los catálogos necesarios
  */
-async function getProjectAndCatalogs(projectId: string, userId: string) {
+async function getProjectAndCatalogs(idOrPublicCode: string, userId: string) {
   try {
     const projectClient = getProjectClient()
     const productClient = getProductClient()
     
-    // Obtener proyecto
-    const backendProject = await projectClient.getProjectById(projectId)
+    // Intentar primero por public_code, luego por ID
+    let backendProject = await projectClient.getProjectByPublicCode(idOrPublicCode)
+    
+    if (!backendProject) {
+      backendProject = await projectClient.getProjectById(idOrPublicCode)
+    }
     
     if (!backendProject) {
       return null
@@ -141,7 +145,7 @@ export default async function NewProductPage({ params }: NewProductPageProps) {
 
           {/* Formulario */}
           <ProductForm 
-            projectId={id}
+            projectId={project.id}
             categories={categories}
             modules={modules}
           />

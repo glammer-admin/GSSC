@@ -44,7 +44,7 @@ export interface ProjectMetrics {
  */
 export interface Project {
   id: string
-  /** Código público para URL de detalle (ej. /dashboard/project/{publicCode}) */
+  /** Código público para URL de detalle (ej. /project/{publicCode}) */
   publicCode: string
   name: string
   status: ProjectStatus

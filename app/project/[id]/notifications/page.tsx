@@ -1,47 +1,49 @@
-import { redirect, notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
+import { Bell } from "lucide-react"
 import { getSession, isCompleteSession } from "@/lib/auth/session-manager"
 import { getProjectClient, getProjectStorageClient } from "@/lib/http/project"
 import { toProject } from "@/lib/types/project/types"
 import { ServerAuthenticatedLayout } from "@/components/server-authenticated-layout"
 import { ProjectHeader } from "@/components/project-home/project-header"
 import { ProjectSidebar } from "@/components/project-home/project-sidebar"
-import { ProjectConfigForm } from "@/components/project-home/project-config-form"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
-interface EditProjectPageProps {
+interface NotificationsPageProps {
   params: Promise<{ id: string }>
 }
 
 /**
- * Obtiene el proyecto desde el backend (por ID o public_code)
+ * Obtiene el proyecto por ID o por public_code y valida propiedad
  */
-async function getProject(idOrPublicCode: string, userId: string) {
+async function getProjectData(idOrPublicCode: string, userId: string) {
   try {
     const projectClient = getProjectClient()
-    
+
     // Intentar primero por public_code, luego por ID
     let backendProject = await projectClient.getProjectByPublicCode(idOrPublicCode)
-    
+
     if (!backendProject) {
       backendProject = await projectClient.getProjectById(idOrPublicCode)
     }
-    
+
     if (!backendProject) {
       return null
     }
-    
-    // Verificar propiedad
+
+    // RN-01: Solo el propietario puede acceder
     if (backendProject.organizer_id !== userId) {
       return null
     }
-    
-    // Intentar obtener URL del logo
+
+    // Obtener logo
     let logoUrl: string | undefined
     try {
       const storageClient = getProjectStorageClient()
       const files = await storageClient.listProjectFiles(backendProject.id)
-      
+
       if (files.length > 0) {
-        const logoFile = files.find(f => f.startsWith("logo."))
+        const logoFile = files.find((f) => f.startsWith("logo."))
         if (logoFile) {
           const extension = logoFile.split(".").pop() || "png"
           logoUrl = storageClient.getPublicUrl(backendProject.id, extension)
@@ -50,7 +52,7 @@ async function getProject(idOrPublicCode: string, userId: string) {
     } catch {
       // Ignorar errores al obtener logo
     }
-    
+
     return toProject(backendProject, logoUrl)
   } catch (error) {
     console.error("Error loading project:", error)
@@ -58,49 +60,47 @@ async function getProject(idOrPublicCode: string, userId: string) {
   }
 }
 
-export async function generateMetadata({ params }: EditProjectPageProps) {
+export async function generateMetadata({ params }: NotificationsPageProps) {
   const { id } = await params
-  
-  // Validar sesión para metadata
+
   const session = await getSession()
   if (!session || !isCompleteSession(session)) {
     return {
-      title: "Configuración | GSSC",
-      description: "Configuración del proyecto",
+      title: "Notificaciones | GSSC",
+      description: "Centro de notificaciones del proyecto",
     }
   }
-  
+
   const userId = session.userId || session.sub
-  const project = await getProject(id, userId)
-  
+  const project = await getProjectData(id, userId)
+
   return {
-    title: project ? `Configuración - ${project.name} | GSSC` : "Configuración | GSSC",
-    description: "Configuración del proyecto",
+    title: project
+      ? `Notificaciones - ${project.name} | GSSC`
+      : "Notificaciones | GSSC",
+    description: "Centro de notificaciones del proyecto",
   }
 }
 
 /**
- * Página de configuración del proyecto
- * 
- * Server Component que:
- * - Valida sesión del usuario
- * - Verifica rol organizador
- * - Carga el proyecto por ID o public_code desde el backend
- * - Verifica propiedad del proyecto (RN-01)
- * - Reutiliza la UI de edición con nombre solo lectura (RN-03)
- * - Los cambios se registran en el modelo de auditoría (RN-04)
+ * Página de Notificaciones del Proyecto (Placeholder)
+ *
+ * Muestra un placeholder con mensaje "Próximamente"
+ * según RN-05: Las métricas no soportadas por el modelo
+ * (incluyendo notificaciones) se muestran como placeholder visual.
  */
-export default async function EditProjectPage({ params }: EditProjectPageProps) {
+export default async function NotificationsPage({
+  params,
+}: NotificationsPageProps) {
   const { id } = await params
-  
+
   // Validar sesión
   const session = await getSession()
-  
+
   if (!session) {
     notFound()
   }
-  
-  // Verificar sesión completa
+
   if (!isCompleteSession(session)) {
     if (session.needsOnboarding) {
       redirect("/onboarding")
@@ -110,21 +110,19 @@ export default async function EditProjectPage({ params }: EditProjectPageProps) 
     }
     notFound()
   }
-  
-  // Verificar rol organizador
+
   if (session.role !== "organizer") {
     notFound()
   }
-  
+
   const userId = session.userId || session.sub
-  
-  // Cargar proyecto desde backend
-  const project = await getProject(id, userId)
-  
+
+  const project = await getProjectData(id, userId)
+
   if (!project) {
     notFound()
   }
-  
+
   return (
     <ServerAuthenticatedLayout session={session}>
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -147,18 +145,32 @@ export default async function EditProjectPage({ params }: EditProjectPageProps) 
             <main className="flex-1 min-w-0">
               <div className="space-y-6">
                 {/* Título de la sección */}
-                <div>
-                  <h2 className="text-2xl font-semibold tracking-tight">Configuración</h2>
-                  <p className="text-muted-foreground mt-1">
-                    Ajusta la configuración de tu proyecto
-                  </p>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-semibold tracking-tight">
+                    Notificaciones
+                  </h2>
+                  <Badge variant="secondary">Próximamente</Badge>
                 </div>
 
-                {/* Formulario de configuración */}
-                <ProjectConfigForm 
-                  project={project} 
-                  returnUrl={`/project/${id}`} 
-                />
+                {/* Placeholder */}
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-16">
+                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                      <Bell className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">
+                      Centro de notificaciones
+                    </h3>
+                    <p className="text-muted-foreground text-center max-w-md">
+                      Pronto podrás recibir notificaciones sobre nuevas ventas,
+                      cambios en pedidos y más información relevante de tu
+                      proyecto.
+                    </p>
+                    <Badge variant="outline" className="mt-4">
+                      En desarrollo
+                    </Badge>
+                  </CardContent>
+                </Card>
               </div>
             </main>
           </div>

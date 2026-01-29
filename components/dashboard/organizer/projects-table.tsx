@@ -90,7 +90,7 @@ export function ProjectsTable({ projects }: ProjectsTableProps) {
                 </TableCell>
                 <TableCell>
                   <Link
-                    href={`/dashboard/project/${project.publicCode}`}
+                    href={`/project/${project.publicCode}`}
                     className="flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"
                     aria-label={`Ver detalles de ${project.name}`}
                   >

@@ -16,14 +16,18 @@ interface EditProductPageProps {
 /**
  * Obtiene el proyecto, producto y catálogos necesarios
  */
-async function getProductData(projectId: string, productId: string, userId: string) {
+async function getProductData(idOrPublicCode: string, productId: string, userId: string) {
   try {
     const projectClient = getProjectClient()
     const productClient = getProductClient()
     const storageClient = getProductStorageClient()
     
-    // Obtener proyecto
-    const backendProject = await projectClient.getProjectById(projectId)
+    // Intentar primero por public_code, luego por ID
+    let backendProject = await projectClient.getProjectByPublicCode(idOrPublicCode)
+    
+    if (!backendProject) {
+      backendProject = await projectClient.getProjectById(idOrPublicCode)
+    }
     
     if (!backendProject) {
       return null
@@ -39,7 +43,8 @@ async function getProductData(projectId: string, productId: string, userId: stri
     // Obtener producto
     const backendProduct = await productClient.getProductById(productId)
     
-    if (!backendProduct || backendProduct.project_id !== projectId) {
+    // Verificar que el producto pertenece al proyecto (usar ID interno)
+    if (!backendProduct || backendProduct.project_id !== backendProject.id) {
       return null
     }
     
@@ -174,7 +179,7 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
 
           {/* Formulario */}
           <ProductForm 
-            projectId={id}
+            projectId={project.id}
             product={product}
             categories={categories}
             modules={modules}

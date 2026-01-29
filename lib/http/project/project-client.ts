@@ -113,6 +113,45 @@ class ProjectClient {
     }
   }
 
+  /**
+   * Obtiene el resumen de ventas de un proyecto específico por código público.
+   * @param publicCode - Código público del proyecto (formato PRJ-XXXXX)
+   * @param organizerId - ID del organizador para validación
+   * @returns Fila de project_sales_summary o null si no existe/no es del organizador
+   */
+  async getProjectSalesSummaryByPublicCode(
+    publicCode: string,
+    organizerId: string
+  ): Promise<ProjectSalesSummaryRow | null> {
+    try {
+      console.log(`🔍 [PROJECT CLIENT] Getting sales summary for project: ${publicCode}`)
+      const select =
+        "project_public_code,project_name,project_status,orders_count,units_sold,organizer_commission_total,currency,last_sale_at"
+      const response = await this.client.get<ProjectSalesSummaryRow[]>(
+        "/project_sales_summary",
+        {
+          params: {
+            select,
+            project_public_code: `eq.${publicCode}`,
+            organizer_id: `eq.${organizerId}`,
+          },
+          headers: this.getReadHeaders(),
+        }
+      )
+
+      if (!response || response.length === 0) {
+        console.log(`ℹ️ [PROJECT CLIENT] Sales summary not found for project: ${publicCode}`)
+        return null
+      }
+
+      console.log(`✅ [PROJECT CLIENT] Sales summary found for project: ${publicCode}`)
+      return response[0]
+    } catch (error) {
+      this.handleError("getProjectSalesSummaryByPublicCode", error)
+      throw error
+    }
+  }
+
   // ============================================================
   // CRUD DE PROYECTOS
   // ============================================================
@@ -171,6 +210,36 @@ class ProjectClient {
       return response[0]
     } catch (error) {
       this.handleError("getProjectById", error)
+      throw error
+    }
+  }
+
+  /**
+   * Obtiene un proyecto por código público
+   * @param publicCode - Código público del proyecto (formato PRJ-XXXXX)
+   * @returns Proyecto o null si no existe
+   */
+  async getProjectByPublicCode(publicCode: string): Promise<BackendProject | null> {
+    try {
+      console.log(`🔍 [PROJECT CLIENT] Getting project by public_code: ${publicCode}`)
+      
+      const response = await this.client.get<BackendArrayResponse<BackendProject>>(
+        "/glam_projects",
+        {
+          params: { public_code: `eq.${publicCode}` },
+          headers: this.getReadHeaders(),
+        }
+      )
+
+      if (!response || response.length === 0) {
+        console.log(`ℹ️ [PROJECT CLIENT] Project not found by public_code: ${publicCode}`)
+        return null
+      }
+
+      console.log(`✅ [PROJECT CLIENT] Project found by public_code: ${publicCode}`)
+      return response[0]
+    } catch (error) {
+      this.handleError("getProjectByPublicCode", error)
       throw error
     }
   }
