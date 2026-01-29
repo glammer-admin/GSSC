@@ -1,5 +1,0 @@
-con base en la descripcion funcionl ./desc-functional.md crea las especificaciones de producto en ./spec.md siguiendolas reglas del temaplate ../template/template_spec.md, si tienes preguntas puedes realizarlas antes de crear el spec, y no modificar ningun otro archivo.
-
-Cno base en la especificacion ./spec.md utilizando la guia d econstruccion de planes ../temaplate/temaplate_plan.md  vamso a construir el plan de ejecuicion en el archivo .plan.md teniendo en centa las esepcificaciones tecnicas del proyecto que se encuentran en ../../DOCS_TECHNICAL.md.
-
-Ejecuta el plan.md para implementar los specs.md, no crees documentacion extra 

@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth/session-manager"
 import { ServerAuthenticatedLayout } from "@/components/server-authenticated-layout"
 import { DashboardContent } from "@/components/dashboard/organizer/dashboard-content"
 import { loadOrganizerDashboardData } from "@/lib/mocks/dashboard-loader"
+import { getProjectClient, mapProjectSalesSummaryRowToProject } from "@/lib/http/project"
 
 /**
  * Dashboard del Organizador
@@ -12,8 +13,9 @@ import { loadOrganizerDashboardData } from "@/lib/mocks/dashboard-loader"
  * 
  * Server Component que:
  * 1. Valida sesión y rol
- * 2. Carga datos desde mocks (futuro: backend)
- * 3. Pasa datos a Client Components
+ * 2. Carga proyectos desde project_sales_summary (backend)
+ * 3. Carga métricas y gráficas desde mocks
+ * 4. Pasa datos a Client Components
  */
 export default async function Dashboard() {
   // SSR: Validar sesión en el servidor
@@ -40,8 +42,23 @@ export default async function Dashboard() {
     redirect("/")
   }
 
-  // Cargar datos del dashboard (desde mocks en esta fase)
-  const dashboardData = loadOrganizerDashboardData()
+  // Proyectos: desde project_sales_summary (backend), mismo patrón que billing/proyectos
+  const organizerId = session.userId || session.sub
+  let projects: Awaited<ReturnType<typeof loadOrganizerDashboardData>>["projects"] = []
+  try {
+    const rows = await getProjectClient().getProjectSalesSummary(organizerId)
+    projects = rows.map(mapProjectSalesSummaryRowToProject)
+  } catch (error) {
+    console.error("[Dashboard] Error loading project_sales_summary:", error)
+    projects = []
+  }
+
+  // Métricas y gráficas: desde mocks (sin cambiar)
+  const restData = loadOrganizerDashboardData()
+  const dashboardData = {
+    ...restData,
+    projects,
+  }
 
   return (
     <ServerAuthenticatedLayout session={session}>

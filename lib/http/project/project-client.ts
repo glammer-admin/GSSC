@@ -11,7 +11,13 @@ import type {
   BackendArrayResponse,
   BackendCreateResponse,
   BackendUpdateResponse,
+  ProjectSalesSummaryRow,
 } from "./types"
+import type {
+  Project,
+  ProjectStatus,
+  ProjectMetrics,
+} from "@/lib/types/dashboard/organizer"
 
 // Configuración desde variables de entorno
 function getBackendConfig() {
@@ -71,6 +77,39 @@ class ProjectClient {
       "Content-Profile": this.dbSchema,
       "Content-Type": "application/json",
       Prefer: "return=representation",
+    }
+  }
+
+  // ============================================================
+  // RESUMEN DE VENTAS POR PROYECTO (project_sales_summary)
+  // ============================================================
+
+  /**
+   * Obtiene el resumen de proyectos del organizador con métricas de ventas.
+   * Mismo patrón que getProjects(organizerId): apiKey en headers y filtro organizer_id.
+   * @param organizerId - ID del organizador (session.userId || session.sub)
+   * @returns Lista de filas de project_sales_summary
+   */
+  async getProjectSalesSummary(organizerId: string): Promise<ProjectSalesSummaryRow[]> {
+    try {
+      const select =
+        "project_public_code,project_name,project_status,orders_count,units_sold,organizer_commission_total,currency,last_sale_at"
+      const response = await this.client.get<ProjectSalesSummaryRow[]>(
+        "/project_sales_summary",
+        {
+          params: {
+            select,
+            order: "last_sale_at.desc.nullslast",
+            organizer_id: `eq.${organizerId}`,
+          },
+          headers: this.getReadHeaders(),
+        }
+      )
+      console.log(`✅ [PROJECT CLIENT] project_sales_summary: ${response?.length ?? 0} rows`)
+      return response ?? []
+    } catch (error) {
+      this.handleError("getProjectSalesSummary", error)
+      throw error
     }
   }
 
@@ -258,6 +297,40 @@ export function getProjectClient(): ProjectClient {
     projectClientInstance = new ProjectClient()
   }
   return projectClientInstance
+}
+
+/**
+ * Mapea project_status del backend al ProjectStatus del dashboard.
+ * Backend: active | paused | finished (specs/sells/sells-curl-example.md).
+ */
+function mapBackendStatusToProjectStatus(status: string): ProjectStatus {
+  if (status === "active" || status === "paused" || status === "finished") {
+    return status
+  }
+  return "active"
+}
+
+/**
+ * Mapea una fila de project_sales_summary al tipo Project del dashboard.
+ * Usa project_public_code como id y publicCode para la URL de detalle.
+ */
+export function mapProjectSalesSummaryRowToProject(row: ProjectSalesSummaryRow): Project {
+  const status = mapBackendStatusToProjectStatus(row.project_status)
+  const orders = Number(row.orders_count) || 0
+  const metrics: ProjectMetrics = {
+    orders,
+    completedOrders: orders,
+    inProgressOrders: 0,
+    unitsSold: Number(row.units_sold) || 0,
+    commission: Number(row.organizer_commission_total) || 0,
+  }
+  return {
+    id: row.project_public_code,
+    publicCode: row.project_public_code,
+    name: row.project_name,
+    status,
+    metrics,
+  }
 }
 
 // Re-export errors for convenience

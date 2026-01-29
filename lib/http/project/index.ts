@@ -3,7 +3,12 @@
  */
 
 // Cliente de proyectos
-export { getProjectClient, HttpError, NetworkError } from "./project-client"
+export {
+  getProjectClient,
+  mapProjectSalesSummaryRowToProject,
+  HttpError,
+  NetworkError,
+} from "./project-client"
 
 // Cliente de Storage para logos
 export { getProjectStorageClient, type LogoUploadResult } from "./project-storage-client"
@@ -16,4 +21,5 @@ export type {
   BackendArrayResponse,
   BackendCreateResponse,
   BackendUpdateResponse,
+  ProjectSalesSummaryRow,
 } from "./types"
