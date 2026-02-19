@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2, Save, X } from "lucide-react"
 import { toast } from "sonner"
@@ -12,15 +12,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
 import { CategorySelector } from "./category-selector"
+import { GlamProductSelector } from "./glam-product-selector"
+import { AttributeSelector } from "./attribute-selector"
 import { BasicInfoSection } from "./basic-info-section"
 import { PersonalizationConfig } from "./personalization-config"
 import { ImageManager } from "./image-manager"
 import { StatusSection } from "./status-section"
+import { CostSummarySection } from "./cost-summary-section"
 import { ConfirmCancelModal } from "./confirm-cancel-modal"
 import {
   validateProductName,
-  validateBasePrice,
   validateModulesForCategory,
   canActivateProduct,
   createEmptyPersonalizationConfig,
@@ -32,47 +35,41 @@ import type {
   ProductStatus,
   PersonalizationConfig as PersonalizationConfigType,
   ProductImage,
+  GlamProduct,
+  SelectedAttributes,
 } from "@/lib/types/product/types"
 
 interface ProductFormProps {
   projectId: string
-  product?: Product // Si existe, es modo edición
+  product?: Product
   categories: ProductCategory[]
   modules: PersonalizationModule[]
-  isConfigEditable?: boolean // Solo aplica en edición
+  isConfigEditable?: boolean
+  project?: { commission: number }
 }
 
 interface FormErrors {
   category?: string
+  glamProduct?: string
   name?: string
   description?: string
-  basePrice?: string
   personalization?: string
   images?: string
   status?: string
+  attributes?: string
 }
 
-/**
- * Formulario principal de creación/edición de producto
- * 
- * Client Component que maneja:
- * - Selección de categoría
- * - Información básica (nombre, descripción, precio)
- * - Configuración de personalización (módulos)
- * - Gestión de imágenes
- * - Estado del producto
- */
-export function ProductForm({ 
-  projectId, 
-  product, 
-  categories, 
+export function ProductForm({
+  projectId,
+  product,
+  categories,
   modules,
   isConfigEditable = true,
+  project,
 }: ProductFormProps) {
   const router = useRouter()
   const isEditMode = !!product
-  
-  // Estado del formulario
+
   const [categoryId, setCategoryId] = useState<string | undefined>(product?.categoryId)
   const [name, setName] = useState(product?.name || "")
   const [description, setDescription] = useState(product?.description || "")
@@ -82,18 +79,60 @@ export function ProductForm({
   )
   const [images, setImages] = useState<ProductImage[]>(product?.images || [])
   const [status, setStatus] = useState<ProductStatus>(product?.status || "draft")
-  
-  // Estado de UI
+  const [glamProductId, setGlamProductId] = useState<string | undefined>(undefined)
+  const [glamProducts, setGlamProducts] = useState<GlamProduct[]>([])
+  const [selectedAttributes, setSelectedAttributes] = useState<SelectedAttributes>({})
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
   const [showCancelModal, setShowCancelModal] = useState(false)
-  
-  // Obtener categoría seleccionada
+
   const selectedCategory = useMemo(() => {
     return categories.find(c => c.id === categoryId)
   }, [categories, categoryId])
-  
-  // Valores iniciales para detectar cambios
+
+  const selectedGlamProduct = useMemo(() => {
+    return glamProducts.find(gp => gp.id === glamProductId)
+  }, [glamProducts, glamProductId])
+
+  const attributesSurcharge = useMemo(() => {
+    return Object.values(selectedAttributes).reduce(
+      (sum, attr) => sum + (attr.price_modifier ?? 0),
+      0,
+    )
+  }, [selectedAttributes])
+
+  useEffect(() => {
+    if (isEditMode || !categoryId) {
+      setGlamProducts([])
+      setGlamProductId(undefined)
+      setSelectedAttributes({})
+      return
+    }
+    let cancelled = false
+    fetch(`/api/product?glamProducts=true&categoryId=${encodeURIComponent(categoryId)}`)
+      .then((res) => res.json())
+      .then((result: { success: boolean; data?: GlamProduct[] }) => {
+        if (!cancelled && result.success && result.data?.length) {
+          setGlamProducts(result.data)
+        } else if (!cancelled) {
+          setGlamProducts([])
+        }
+        if (!cancelled) {
+          setGlamProductId(undefined)
+          setSelectedAttributes({})
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGlamProducts([])
+          setGlamProductId(undefined)
+          setSelectedAttributes({})
+        }
+      })
+    return () => { cancelled = true }
+  }, [categoryId, isEditMode])
+
   const initialValues = useMemo(() => ({
     categoryId: product?.categoryId,
     name: product?.name || "",
@@ -102,8 +141,7 @@ export function ProductForm({
     personalizationConfig: product?.personalizationConfig || createEmptyPersonalizationConfig(),
     status: product?.status || "draft",
   }), [product])
-  
-  // Detectar si hay cambios sin guardar
+
   const hasUnsavedChanges = useMemo(() => {
     if (!isEditMode) {
       return (
@@ -113,7 +151,6 @@ export function ProductForm({
         basePrice !== undefined
       )
     }
-    
     return (
       categoryId !== initialValues.categoryId ||
       name !== initialValues.name ||
@@ -122,64 +159,58 @@ export function ProductForm({
       JSON.stringify(personalizationConfig) !== JSON.stringify(initialValues.personalizationConfig) ||
       status !== initialValues.status
     )
-  }, [
-    isEditMode,
-    categoryId,
-    name,
-    description,
-    basePrice,
-    personalizationConfig,
-    status,
-    initialValues,
-  ])
-  
-  // Handlers
+  }, [isEditMode, categoryId, name, description, basePrice, personalizationConfig, status, initialValues])
+
   const handleCategoryChange = useCallback((newCategoryId: string) => {
     setCategoryId(newCategoryId)
-    // Limpiar configuración de personalización al cambiar categoría
+    setGlamProductId(undefined)
+    setSelectedAttributes({})
     if (newCategoryId !== categoryId) {
       setPersonalizationConfig(createEmptyPersonalizationConfig())
     }
   }, [categoryId])
-  
+
+  const handleGlamProductSelect = useCallback((gp: GlamProduct) => {
+    setGlamProductId(gp.id)
+    setName(gp.name)
+    setDescription(gp.description ?? "")
+    setBasePrice(gp.basePrice)
+    setSelectedAttributes({})
+    setPersonalizationConfig(createEmptyPersonalizationConfig())
+  }, [])
+
   const handlePersonalizationChange = useCallback((config: PersonalizationConfigType) => {
     setPersonalizationConfig(config)
   }, [])
-  
+
   const handleImagesChange = useCallback((newImages: ProductImage[]) => {
     setImages(newImages)
   }, [])
-  
+
   const handleStatusChange = useCallback((newStatus: ProductStatus) => {
     setStatus(newStatus)
   }, [])
-  
-  // Validar formulario
+
   const validateForm = useCallback((): boolean => {
     const newErrors: FormErrors = {}
     let isValid = true
-    
-    // Validar categoría
-    if (!categoryId) {
-      newErrors.category = "Selecciona una categoría"
-      isValid = false
+
+    if (!isEditMode) {
+      if (!categoryId) {
+        newErrors.category = "Selecciona una categoría"
+        isValid = false
+      } else if (!glamProductId) {
+        newErrors.glamProduct = "Selecciona un producto del catálogo"
+        isValid = false
+      }
     }
-    
-    // Validar nombre
+
     const nameValidation = validateProductName(name)
     if (!nameValidation.valid) {
       newErrors.name = nameValidation.error
       isValid = false
     }
-    
-    // Validar precio
-    const priceValidation = validateBasePrice(basePrice)
-    if (!priceValidation.valid) {
-      newErrors.basePrice = priceValidation.error
-      isValid = false
-    }
-    
-    // Validar módulos de personalización
+
     if (selectedCategory && personalizationConfig) {
       const modulesValidation = validateModulesForCategory(
         personalizationConfig,
@@ -190,11 +221,11 @@ export function ProductForm({
         isValid = false
       }
     }
-    
-    // Validar requisitos para activar
+
     if (status === "active") {
+      const effectivePrice = basePrice ?? product?.basePrice ?? 0
       const activationCheck = canActivateProduct(
-        { name, basePrice },
+        { name, basePrice: effectivePrice },
         images.length
       )
       if (!activationCheck.valid) {
@@ -202,78 +233,72 @@ export function ProductForm({
         isValid = false
       }
     }
-    
+
     setErrors(newErrors)
     return isValid
-  }, [categoryId, name, basePrice, selectedCategory, personalizationConfig, status, images.length])
-  
-  // Manejar envío del formulario
+  }, [categoryId, glamProductId, name, basePrice, product?.basePrice, selectedCategory, personalizationConfig, status, images.length, isEditMode])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!validateForm()) {
       toast.error("Por favor, corrige los errores en el formulario")
       return
     }
-    
+
     setIsSubmitting(true)
-    
+
     try {
       const url = isEditMode ? `/api/product/${product.id}` : "/api/product"
       const method = isEditMode ? "PATCH" : "POST"
-      
+
+      const priceForSubmit = basePrice ?? product?.basePrice ?? 0
       const bodyData = isEditMode
         ? {
             name: name.trim(),
             description: description.trim() || undefined,
-            basePrice,
-            ...(isConfigEditable && { personalizationConfig }),
+            basePrice: priceForSubmit,
             status,
           }
         : {
             projectId,
-            categoryId,
+            glamProductId: glamProductId!,
             name: name.trim(),
             description: description.trim() || undefined,
-            basePrice,
+            price: priceForSubmit,
             personalizationConfig,
+            selectedAttributes,
           }
-      
+
       const response = await fetch(url, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bodyData),
       })
-      
+
       const result = await response.json()
-      
+
       if (!response.ok) {
         throw new Error(result.error || "Error al guardar el producto")
       }
-      
+
       toast.success(
         isEditMode
           ? "Producto actualizado exitosamente"
           : "Producto creado exitosamente"
       )
-      
-      // Redirigir a la lista de productos
+
       router.push(`/project/${projectId}/products`)
       router.refresh()
     } catch (error) {
       console.error("Error saving product:", error)
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Error al guardar el producto"
+        error instanceof Error ? error.message : "Error al guardar el producto"
       )
       setIsSubmitting(false)
     }
   }
-  
-  // Manejar cancelación
+
   const handleCancel = useCallback(() => {
     if (hasUnsavedChanges) {
       setShowCancelModal(true)
@@ -281,24 +306,50 @@ export function ProductForm({
       router.push(`/project/${projectId}/products`)
     }
   }, [hasUnsavedChanges, router, projectId])
-  
+
   const handleConfirmCancel = useCallback(() => {
     setShowCancelModal(false)
     router.push(`/project/${projectId}/products`)
   }, [router, projectId])
-  
+
+  const productSelected = isEditMode || glamProductId !== undefined
+  const hasAttributes = selectedGlamProduct
+    ? Object.keys(selectedGlamProduct.attributesConfig).length > 0
+    : false
+
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Selección de categoría */}
+        {/* Información básica */}
         <Card>
           <CardHeader>
-            <CardTitle>Categoría</CardTitle>
+            <CardTitle>Información básica</CardTitle>
             <CardDescription>
-              Selecciona el tipo de producto. Esto determina las opciones de personalización disponibles.
+              Nombre y descripción del producto
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <BasicInfoSection
+              name={name}
+              description={description}
+              disabled={isSubmitting}
+              errors={{ name: errors.name, description: errors.description }}
+              onNameChange={setName}
+              onDescriptionChange={setDescription}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Categoría → Producto → Atributos → Personalización */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Categoría y producto</CardTitle>
+            <CardDescription>
+              Selecciona la categoría, luego elige un producto del catálogo para configurar sus atributos y personalización.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Paso 1: Categoría */}
             <CategorySelector
               categories={categories}
               selectedCategoryId={categoryId}
@@ -306,62 +357,70 @@ export function ProductForm({
               error={errors.category}
               onChange={handleCategoryChange}
             />
+
+            {/* Paso 2: Productos del catálogo */}
+            {!isEditMode && categoryId && glamProducts.length > 0 && (
+              <>
+                <Separator />
+                <GlamProductSelector
+                  products={glamProducts}
+                  selectedId={glamProductId}
+                  disabled={isSubmitting}
+                  onSelect={handleGlamProductSelect}
+                />
+              </>
+            )}
+            {errors.glamProduct && (
+              <p className="text-sm text-destructive">{errors.glamProduct}</p>
+            )}
+
+            {/* Paso 3: Atributos (solo si el producto tiene attributes_config) */}
+            {productSelected && hasAttributes && selectedGlamProduct && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">Atributos del producto</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Selecciona los atributos para este producto. Algunos atributos pueden tener un valor adicional.
+                  </p>
+                  <AttributeSelector
+                    attributesConfig={selectedGlamProduct.attributesConfig}
+                    selectedAttributes={selectedAttributes}
+                    disabled={isSubmitting || (isEditMode && !isConfigEditable)}
+                    onChange={setSelectedAttributes}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Paso 4: Personalización */}
+            {selectedCategory && productSelected && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">Personalización</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Configura las opciones de personalización disponibles para el comprador. Estas opciones no afectan el precio del producto.
+                  </p>
+                  <PersonalizationConfig
+                    category={selectedCategory}
+                    modules={modules}
+                    config={personalizationConfig}
+                    disabled={isSubmitting || !isConfigEditable}
+                    error={errors.personalization}
+                    onChange={handlePersonalizationChange}
+                  />
+                  {!isConfigEditable && (
+                    <p className="text-sm text-muted-foreground mt-4">
+                      La configuración de personalización no puede modificarse porque el producto ya fue activado.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
-        
-        {/* Información básica */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Información básica</CardTitle>
-            <CardDescription>
-              Nombre, descripción y precio del producto
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BasicInfoSection
-              name={name}
-              description={description}
-              basePrice={basePrice}
-              disabled={isSubmitting}
-              errors={{
-                name: errors.name,
-                description: errors.description,
-                basePrice: errors.basePrice,
-              }}
-              onNameChange={setName}
-              onDescriptionChange={setDescription}
-              onBasePriceChange={setBasePrice}
-            />
-          </CardContent>
-        </Card>
-        
-        {/* Configuración de personalización */}
-        {selectedCategory && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Personalización</CardTitle>
-              <CardDescription>
-                Configura las opciones de personalización disponibles para el comprador
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <PersonalizationConfig
-                category={selectedCategory}
-                modules={modules}
-                config={personalizationConfig}
-                disabled={isSubmitting || !isConfigEditable}
-                error={errors.personalization}
-                onChange={handlePersonalizationChange}
-              />
-              {!isConfigEditable && (
-                <p className="text-sm text-muted-foreground mt-4">
-                  La configuración de personalización no puede modificarse porque el producto ya fue activado.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
-        
+
         {/* Gestión de imágenes */}
         {isEditMode && product && (
           <Card>
@@ -385,7 +444,7 @@ export function ProductForm({
             </CardContent>
           </Card>
         )}
-        
+
         {/* Estado */}
         {isEditMode && (
           <Card>
@@ -406,7 +465,26 @@ export function ProductForm({
             </CardContent>
           </Card>
         )}
-        
+
+        {/* Precio tentativo (solo lectura) */}
+        {basePrice !== undefined && basePrice > 0 && project && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Precio tentativo del producto</CardTitle>
+              <CardDescription>
+                Detalle del precio base, recargos por atributos, comisión del proyecto, IVA y total aproximado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CostSummarySection
+                basePrice={basePrice}
+                attributesSurcharge={attributesSurcharge}
+                commissionPercent={project.commission}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Acciones */}
         <div className="flex justify-end gap-3">
           <Button
@@ -433,8 +511,7 @@ export function ProductForm({
           </Button>
         </div>
       </form>
-      
-      {/* Modal de cancelación */}
+
       <ConfirmCancelModal
         open={showCancelModal}
         onOpenChange={setShowCancelModal}

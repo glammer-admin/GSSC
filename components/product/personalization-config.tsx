@@ -286,13 +286,6 @@ export function PersonalizationConfig({
                     </div>
                   </div>
                 )}
-
-                {/* Indicador de precio (MVP siempre 0) */}
-                <div className="mt-4 pt-3 border-t">
-                  <Badge variant="outline" className="text-xs">
-                    Sin recargo adicional (MVP)
-                  </Badge>
-                </div>
               </div>
             )}
           </div>

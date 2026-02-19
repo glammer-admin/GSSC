@@ -8,47 +8,29 @@ import { MAX_PRODUCT_NAME_LENGTH, MAX_PRODUCT_DESCRIPTION_LENGTH } from "@/lib/t
 interface BasicInfoSectionProps {
   name: string
   description: string
-  basePrice?: number
   disabled?: boolean
   errors?: {
     name?: string
     description?: string
-    basePrice?: string
   }
   onNameChange: (name: string) => void
   onDescriptionChange: (description: string) => void
-  onBasePriceChange: (price: number | undefined) => void
 }
 
 /**
- * Sección de información básica del producto
- * Nombre, descripción y precio base
+ * Sección de información básica del producto: nombre y descripción.
+ * El precio viene del producto del catálogo seleccionado y se muestra en Costo aproximado.
  */
 export function BasicInfoSection({
   name,
   description,
-  basePrice,
   disabled = false,
   errors = {},
   onNameChange,
   onDescriptionChange,
-  onBasePriceChange,
 }: BasicInfoSectionProps) {
-  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    if (value === "") {
-      onBasePriceChange(undefined)
-    } else {
-      const numValue = parseFloat(value)
-      if (!isNaN(numValue)) {
-        onBasePriceChange(numValue)
-      }
-    }
-  }
-
   return (
     <div className="space-y-4">
-      {/* Nombre */}
       <div className="space-y-2">
         <Label htmlFor="product-name">
           Nombre del producto <span className="text-destructive">*</span>
@@ -72,7 +54,6 @@ export function BasicInfoSection({
         </div>
       </div>
 
-      {/* Descripción */}
       <div className="space-y-2">
         <Label htmlFor="product-description">Descripción</Label>
         <Textarea
@@ -93,32 +74,6 @@ export function BasicInfoSection({
             {description.length}/{MAX_PRODUCT_DESCRIPTION_LENGTH}
           </span>
         </div>
-      </div>
-
-      {/* Precio base */}
-      <div className="space-y-2">
-        <Label htmlFor="product-price">
-          Precio base <span className="text-destructive">*</span>
-        </Label>
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-            $
-          </span>
-          <Input
-            id="product-price"
-            type="number"
-            value={basePrice ?? ""}
-            onChange={handlePriceChange}
-            placeholder="0"
-            min={1}
-            step={1}
-            disabled={disabled}
-            className={`pl-7 ${errors.basePrice ? "border-destructive" : ""}`}
-          />
-        </div>
-        <p className={`text-xs ${errors.basePrice ? "text-destructive" : "text-muted-foreground"}`}>
-          {errors.basePrice || "Precio en pesos colombianos (COP). En el MVP no hay recargos por personalización."}
-        </p>
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-# Ejemplos cURL para Productos (project_products)
+# Ejemplos cURL para Módulo de Productos
 
 Ejemplos de peticiones cURL para interactuar con las tablas de productos via Supabase REST API.
 
@@ -14,14 +14,25 @@ SUPABASE_KEY="tu-anon-key"
 # Token de autenticación (JWT del usuario logueado)
 AUTH_TOKEN="tu-jwt-token"
 
-# IDs de ejemplo
-PROJECT_ID="550e8400-e29b-41d4-a716-446655440000"
-PRODUCT_ID="a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+# IDs de prueba (creados por migración seed_test_data_products)
+ORGANIZER_ID="a0000000-0000-0000-0000-000000000001"
+BUYER_ID="a0000000-0000-0000-0000-000000000002"
+PROJECT_ID="b0000000-0000-0000-0000-000000000001"
+PROJECT_ID_2="b0000000-0000-0000-0000-000000000002"
+
+# IDs de productos de prueba (todos referenciando glam_products)
+MUG_9OZ_TIGRES_ID="c0000000-0000-0000-0000-000000000001"
+MUG_15OZ_TIGRES_ID="c0000000-0000-0000-0000-000000000002"
+TERMO_600_TIGRES_ID="c0000000-0000-0000-0000-000000000003"
+TERMO_1000_TIGRES_ID="c0000000-0000-0000-0000-000000000004"
+MUG_9OZ_COLEGIO_ID="c0000000-0000-0000-0000-000000000005"
+TERMO_600_COLEGIO_ID="c0000000-0000-0000-0000-000000000006"
+MUG_15OZ_COLEGIO_ID="c0000000-0000-0000-0000-000000000007"
 ```
 
 ## Headers importantes
 
-Las tablas de productos están en el esquema `gssc_db`, por lo que se requieren headers adicionales:
+Las tablas están en el esquema `gssc_db`, por lo que se requieren headers adicionales:
 
 | Header | Uso | Valor |
 |--------|-----|-------|
@@ -32,11 +43,9 @@ Las tablas de productos están en el esquema `gssc_db`, por lo que se requieren 
 
 # 1. Catálogos (Solo Lectura)
 
-Los catálogos de categorías y módulos de personalización son gestionados exclusivamente por la plataforma. Los organizadores solo pueden consultarlos.
+Los catálogos son gestionados exclusivamente por la plataforma. Los organizadores solo pueden consultarlos.
 
 ## 1.1 Listar categorías de productos
-
-Obtiene todas las categorías disponibles con sus modos visuales y módulos permitidos.
 
 ```bash
 curl -X GET "${SUPABASE_URL}/rest/v1/product_categories?order=name.asc" \
@@ -48,7 +57,7 @@ curl -X GET "${SUPABASE_URL}/rest/v1/product_categories?order=name.asc" \
 ### Obtener categoría por código
 
 ```bash
-curl -X GET "${SUPABASE_URL}/rest/v1/product_categories?code=eq.jersey" \
+curl -X GET "${SUPABASE_URL}/rest/v1/product_categories?code=eq.mugs" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"
@@ -58,12 +67,11 @@ curl -X GET "${SUPABASE_URL}/rest/v1/product_categories?code=eq.jersey" \
 ```json
 [
   {
-    "id": "uuid-categoria-jersey",
-    "code": "jersey",
-    "name": "Camiseta/Jersey",
-    "description": "Camisetas y jerseys deportivos con personalización completa",
-    "allowed_visual_modes": ["upload_images", "online_editor", "designer_assisted"],
-    "allowed_modules": ["sizes", "numbers", "names"],
+    "id": "uuid-categoria-mugs",
+    "code": "mugs",
+    "name": "Mugs",
+    "description": "Tazas y mugs personalizados",
+    "allowed_modules": ["sizes"],
     "created_at": "2026-01-16T04:31:58.000Z",
     "updated_at": "2026-01-16T04:31:58.000Z"
   }
@@ -73,8 +81,6 @@ curl -X GET "${SUPABASE_URL}/rest/v1/product_categories?code=eq.jersey" \
 ---
 
 ## 1.2 Listar módulos de personalización
-
-Obtiene todos los módulos de personalización disponibles.
 
 ```bash
 curl -X GET "${SUPABASE_URL}/rest/v1/personalization_modules?order=name.asc" \
@@ -86,34 +92,192 @@ curl -X GET "${SUPABASE_URL}/rest/v1/personalization_modules?order=name.asc" \
 **Respuesta ejemplo:**
 ```json
 [
+  {"id": "uuid", "code": "age_categories", "name": "Categoría de edad", "description": "..."},
+  {"id": "uuid", "code": "names", "name": "Nombre personalizado", "description": "..."},
+  {"id": "uuid", "code": "numbers", "name": "Número deportivo", "description": "..."},
+  {"id": "uuid", "code": "sizes", "name": "Selección de talla", "description": "..."}
+]
+```
+
+---
+
+## 1.3 Listar atributos de producto (product_attributes)
+
+Catálogo maestro de tipos de atributos (calidad, color, material).
+
+```bash
+curl -X GET "${SUPABASE_URL}/rest/v1/product_attributes?is_active=eq.true&order=name.asc" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+**Respuesta ejemplo:**
+```json
+[
+  {"id": "uuid-attr-calidad", "code": "quality", "name": "Calidad", "description": "Nivel de calidad del producto", "is_active": true},
+  {"id": "uuid-attr-color", "code": "color", "name": "Color", "description": "Color del producto", "is_active": true},
+  {"id": "uuid-attr-material", "code": "material", "name": "Material", "description": "Material de fabricación", "is_active": true}
+]
+```
+
+### Atributo con sus opciones (JOIN)
+
+```bash
+curl -X GET "${SUPABASE_URL}/rest/v1/product_attributes?code=eq.quality&select=*,product_attribute_options(id,code,name,display_order,is_active)" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+**Respuesta ejemplo:**
+```json
+[
   {
-    "id": "uuid-modulo-sizes",
-    "code": "sizes",
-    "name": "Selección de talla",
-    "description": "Permite al comprador elegir talla (XS, S, M, L, XL, etc.)",
-    "created_at": "2026-01-16T04:31:58.000Z",
-    "updated_at": "2026-01-16T04:31:58.000Z"
-  },
-  {
-    "id": "uuid-modulo-numbers",
-    "code": "numbers",
-    "name": "Número deportivo",
-    "description": "Permite agregar número en la espalda del jersey (1-99)",
-    "created_at": "2026-01-16T04:31:58.000Z",
-    "updated_at": "2026-01-16T04:31:58.000Z"
+    "id": "uuid-attr-calidad",
+    "code": "quality",
+    "name": "Calidad",
+    "description": "Nivel de calidad del producto",
+    "is_active": true,
+    "product_attribute_options": [
+      {"id": "uuid-opt-estandar", "code": "estandar", "name": "Estándar", "display_order": 1, "is_active": true},
+      {"id": "uuid-opt-premium", "code": "premium", "name": "Premium", "display_order": 2, "is_active": true}
+    ]
   }
 ]
 ```
 
 ---
 
-# 2. Productos (project_products)
+## 1.4 Listar opciones de un atributo
+
+```bash
+# Opciones del atributo "color"
+ATTRIBUTE_ID="uuid-attr-color"
+
+curl -X GET "${SUPABASE_URL}/rest/v1/product_attribute_options?attribute_id=eq.${ATTRIBUTE_ID}&is_active=eq.true&order=display_order.asc" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+**Respuesta ejemplo:**
+```json
+[
+  {"id": "uuid-opt-blanco", "attribute_id": "uuid-attr-color", "code": "blanco", "name": "Blanco", "display_order": 1, "is_active": true},
+  {"id": "uuid-opt-negro", "attribute_id": "uuid-attr-color", "code": "negro", "name": "Negro", "display_order": 2, "is_active": true},
+  {"id": "uuid-opt-azul", "attribute_id": "uuid-attr-color", "code": "azul", "name": "Azul", "display_order": 3, "is_active": true},
+  {"id": "uuid-opt-rojo", "attribute_id": "uuid-attr-color", "code": "rojo", "name": "Rojo", "display_order": 4, "is_active": true}
+]
+```
+
+---
+
+## 1.5 Listar productos del catálogo Glam Urban (glam_products)
+
+Tras elegir una categoría, se listan los productos de esa categoría.
+Cada producto incluye `attributes_config` (JSONB) con las opciones disponibles y sus modificadores de precio.
+
+### Productos por categoría (ej. mugs)
+
+```bash
+CATEGORY_ID="uuid-categoria-mugs"
+
+curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?category_id=eq.${CATEGORY_ID}&is_active=eq.true&order=name.asc" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+### Producto por código
+
+```bash
+curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?code=eq.mug-9oz" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+**Respuesta ejemplo:**
+```json
+[
+  {
+    "id": "uuid-glam-product-mug9",
+    "code": "mug-9oz",
+    "name": "Mug 9 oz",
+    "description": "Taza cerámica 9 onzas",
+    "category_id": "uuid-categoria-mugs",
+    "base_price": 15000.00,
+    "attributes_config": {
+      "quality": {
+        "options": ["estándar", "premium"],
+        "price_modifier": {"estándar": 0, "premium": 3000}
+      }
+    },
+    "is_active": true,
+    "created_at": "2026-02-11T00:00:00.000Z",
+    "updated_at": "2026-02-11T00:00:00.000Z"
+  }
+]
+```
+
+---
+
+## 1.6 Obtener atributos y precios de un producto del catálogo
+
+Los atributos disponibles y sus precios se almacenan directamente en `glam_products.attributes_config` (JSONB).
+
+```bash
+GLAM_PRODUCT_ID="uuid-glam-product-mug9"
+
+curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?id=eq.${GLAM_PRODUCT_ID}&select=id,code,name,base_price,attributes_config" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+**Respuesta ejemplo (mug-9oz con quality):**
+```json
+[
+  {
+    "id": "uuid-glam-product-mug9",
+    "code": "mug-9oz",
+    "name": "Mug 9 oz",
+    "base_price": 15000.00,
+    "attributes_config": {
+      "quality": {
+        "options": ["estándar", "premium"],
+        "price_modifier": {"estándar": 0, "premium": 3000}
+      }
+    }
+  }
+]
+```
+
+### Consulta SQL equivalente (para referencia)
+
+```sql
+SELECT code, name, base_price, attributes_config
+FROM gssc_db.glam_products
+WHERE id = 'uuid-glam-product-mug9';
+```
+
+---
+
+# 2. Productos de Proyecto (project_products)
+
+**Cambios importantes:**
+- `glam_product_id` es **obligatorio** (todo producto de proyecto deriva de un producto del catálogo Glam)
+- `category_id` fue eliminada (la categoría se hereda vía `glam_product → category_id`)
+- `base_price` fue renombrada a `price`
+- `selected_attributes` almacena los atributos elegidos por el organizador (JSONB, **inmutable**)
+- `personalization_config` almacena la configuración de personalización (JSONB, **inmutable**)
 
 ## 2.1 Crear producto
 
-Crea un nuevo producto dentro de un proyecto. **Importante:** El campo `personalization_config` es **inmutable** después de la creación.
+**Importante:** Los campos `personalization_config` y `selected_attributes` son **inmutables** después de la creación.
 
-### Producto tipo Jersey con personalización completa
+### Producto Mug con atributos seleccionados
 
 ```bash
 curl -X POST "${SUPABASE_URL}/rest/v1/project_products" \
@@ -123,33 +287,28 @@ curl -X POST "${SUPABASE_URL}/rest/v1/project_products" \
   -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
-    "project_id": "550e8400-e29b-41d4-a716-446655440000",
-    "category_id": "uuid-categoria-jersey",
-    "name": "Camiseta Local Tigres FC 2026",
-    "description": "Camiseta oficial del equipo local con diseño exclusivo temporada 2026",
-    "base_price": 85000.00,
+    "project_id": "b0000000-0000-0000-0000-000000000001",
+    "glam_product_id": "uuid-glam-product-mug9",
+    "name": "Mug 9 oz - Tigres FC 2026",
+    "description": "Mug conmemorativo del equipo Tigres FC",
+    "price": 15000.00,
     "personalization_config": {
       "sizes": {
         "enabled": true,
-        "options": ["XS", "S", "M", "L", "XL", "XXL"],
+        "options": ["único"],
         "price_modifier": 0
-      },
-      "numbers": {
-        "enabled": true,
-        "min": 1,
-        "max": 99,
-        "price_modifier": 5000
-      },
-      "names": {
-        "enabled": true,
-        "max_length": 15,
-        "price_modifier": 8000
+      }
+    },
+    "selected_attributes": {
+      "quality": {
+        "selected_option": "premium",
+        "price_modifier": 3000
       }
     }
   }'
 ```
 
-### Producto tipo Shorts (solo tallas)
+### Producto Termo con atributos de material
 
 ```bash
 curl -X POST "${SUPABASE_URL}/rest/v1/project_products" \
@@ -159,52 +318,32 @@ curl -X POST "${SUPABASE_URL}/rest/v1/project_products" \
   -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
-    "project_id": "550e8400-e29b-41d4-a716-446655440000",
-    "category_id": "uuid-categoria-shorts",
-    "name": "Short Local Tigres FC 2026",
-    "description": "Short deportivo oficial temporada 2026",
-    "base_price": 45000.00,
+    "project_id": "b0000000-0000-0000-0000-000000000001",
+    "glam_product_id": "uuid-glam-product-termo600",
+    "name": "Termo 600ml - Tigres FC",
+    "description": "Termo deportivo del equipo Tigres FC",
+    "price": 35000.00,
     "personalization_config": {
       "sizes": {
         "enabled": true,
-        "options": ["XS", "S", "M", "L", "XL", "XXL"],
+        "options": ["único"],
         "price_modifier": 0
       }
-    }
-  }'
-```
-
-### Producto tipo Conjunto deportivo (tallas + categorías de edad)
-
-```bash
-curl -X POST "${SUPABASE_URL}/rest/v1/project_products" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Content-Profile: gssc_db" \
-  -H "Prefer: return=representation" \
-  -d '{
-    "project_id": "550e8400-e29b-41d4-a716-446655440000",
-    "category_id": "uuid-categoria-tracksuit",
-    "name": "Conjunto de Calentamiento Tigres FC",
-    "description": "Conjunto completo de calentamiento (chaqueta + pantalón)",
-    "base_price": 150000.00,
-    "personalization_config": {
-      "sizes": {
-        "enabled": true,
-        "options": ["4", "6", "8", "10", "12", "14", "S", "M", "L", "XL"],
+    },
+    "selected_attributes": {
+      "quality": {
+        "selected_option": "estandar",
         "price_modifier": 0
       },
-      "age_categories": {
-        "enabled": true,
-        "options": ["infantil", "juvenil", "adulto"],
+      "material": {
+        "selected_option": "acero_inoxidable",
         "price_modifier": 0
       }
     }
   }'
 ```
 
-### Producto tipo Accesorios
+### Producto sin atributos seleccionados (atributos vacíos)
 
 ```bash
 curl -X POST "${SUPABASE_URL}/rest/v1/project_products" \
@@ -214,18 +353,19 @@ curl -X POST "${SUPABASE_URL}/rest/v1/project_products" \
   -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
-    "project_id": "550e8400-e29b-41d4-a716-446655440000",
-    "category_id": "uuid-categoria-accessories",
-    "name": "Medias Deportivas Tigres FC",
-    "description": "Medias oficiales del equipo",
-    "base_price": 25000.00,
+    "project_id": "b0000000-0000-0000-0000-000000000002",
+    "glam_product_id": "uuid-glam-product-mug15",
+    "name": "Mug 15 oz - Profesores San José",
+    "description": "Mug grande exclusivo para profesores",
+    "price": 18000.00,
     "personalization_config": {
       "sizes": {
         "enabled": true,
-        "options": ["S", "M", "L"],
+        "options": ["único"],
         "price_modifier": 0
       }
-    }
+    },
+    "selected_attributes": {}
   }'
 ```
 
@@ -234,19 +374,52 @@ curl -X POST "${SUPABASE_URL}/rest/v1/project_products" \
 ## 2.2 Obtener producto por ID
 
 ```bash
-curl -X GET "${SUPABASE_URL}/rest/v1/project_products?id=eq.${PRODUCT_ID}" \
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_TIGRES_ID}" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"
 ```
 
-### Con información de la categoría (join)
+### Con producto catálogo e imágenes (JOIN completo)
 
 ```bash
-curl -X GET "${SUPABASE_URL}/rest/v1/project_products?id=eq.${PRODUCT_ID}&select=*,product_categories(code,name,allowed_visual_modes)" \
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_COLEGIO_ID}&select=*,glam_products(code,name,base_price,attributes_config,product_categories(code,name,allowed_modules)),product_images(id,url,position,source)" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"
+```
+
+**Respuesta ejemplo:**
+```json
+[
+  {
+    "id": "c0000000-0000-0000-0000-000000000005",
+    "project_id": "b0000000-0000-0000-0000-000000000002",
+    "glam_product_id": "uuid-mug9",
+    "name": "Mug 9 oz - Colegio San José",
+    "description": "Mug conmemorativo 50 aniversario del colegio",
+    "status": "active",
+    "price": 15000.00,
+    "personalization_config": {"sizes": {"enabled": true, "options": ["único"], "price_modifier": 0}},
+    "selected_attributes": {},
+    "glam_products": {
+      "code": "mug-9oz",
+      "name": "Mug 9 oz",
+      "base_price": 15000.00,
+      "attributes_config": {"quality": {"options": ["estándar", "premium"], "price_modifier": {"estándar": 0, "premium": 3000}}},
+      "product_categories": {
+        "code": "mugs",
+        "name": "Mugs",
+        "allowed_modules": ["sizes"]
+      }
+    },
+    "product_images": [
+      {"id": "uuid", "url": "https://...", "position": 1, "source": "upload"},
+      {"id": "uuid", "url": "https://...", "position": 2, "source": "upload"},
+      {"id": "uuid", "url": "https://...", "position": 3, "source": "upload"}
+    ]
+  }
+]
 ```
 
 ---
@@ -271,19 +444,21 @@ curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID
   -H "Accept-Profile: gssc_db"
 ```
 
-### Filtrar por categoría
+### Filtrar por producto del catálogo
 
 ```bash
-curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID}&category_id=eq.uuid-categoria-jersey" \
+GLAM_PRODUCT_ID="uuid-glam-product-mug9"
+
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID}&glam_product_id=eq.${GLAM_PRODUCT_ID}" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"
 ```
 
-### Con imágenes incluidas (join)
+### Con imágenes y datos del catálogo (join)
 
 ```bash
-curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID}&select=*,product_images(id,url,position,source)&order=created_at.desc" \
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID}&select=*,glam_products(code,name,base_price),product_images(id,url,position,source)&order=created_at.desc" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"
@@ -293,77 +468,57 @@ curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID
 
 ## 2.4 Editar producto
 
-**Nota importante:** El campo `personalization_config` **NO puede ser modificado** después de la creación. Solo se pueden editar: `name`, `description`, `status`, `base_price`.
+**Nota:** Los campos `personalization_config` y `selected_attributes` **NO pueden ser modificados**. Solo se pueden editar: `name`, `description`, `status`, `price`.
 
 ### Actualizar información básica
 
 ```bash
-curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${PRODUCT_ID}" \
+curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_TIGRES_ID}" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
   -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
-    "name": "Camiseta Local Tigres FC 2026 - Edición Especial",
-    "description": "Camiseta oficial con nuevo diseño conmemorativo",
-    "base_price": 95000.00
+    "name": "Mug 9 oz - Tigres FC 2026 - Edición Especial",
+    "description": "Mug conmemorativo con nuevo diseño",
+    "price": 17000.00
   }'
 ```
 
 ### Activar producto (publicar)
 
 ```bash
-curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${PRODUCT_ID}" \
+curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${TERMO_600_TIGRES_ID}" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
   -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
-  -d '{
-    "status": "active"
-  }'
+  -d '{"status": "active"}'
 ```
 
 ### Desactivar producto
 
-**Nota:** Los productos no se eliminan, solo se desactivan.
-
 ```bash
-curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${PRODUCT_ID}" \
+curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_TIGRES_ID}" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
   -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
-  -d '{
-    "status": "inactive"
-  }'
-```
-
-### Volver a borrador
-
-```bash
-curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${PRODUCT_ID}" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Content-Profile: gssc_db" \
-  -H "Prefer: return=representation" \
-  -d '{
-    "status": "draft"
-  }'
+  -d '{"status": "inactive"}'
 ```
 
 ---
 
 ## 2.5 Eliminar producto
 
-**⚠️ IMPORTANTE:** La eliminación de productos está **PROHIBIDA** por regla de negocio. Los productos solo pueden ser desactivados (`status = 'inactive'`). Si intentas eliminar un producto, el trigger `prevent_product_deletion` rechazará la operación.
+**PROHIBIDO por regla de negocio.** El trigger `prevent_product_deletion` rechazará la operación.
 
 ```bash
-# ❌ ESTO FALLARÁ - No se permite eliminar productos
-curl -X DELETE "${SUPABASE_URL}/rest/v1/project_products?id=eq.${PRODUCT_ID}" \
+# ❌ ESTO FALLARÁ
+curl -X DELETE "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_TIGRES_ID}" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Profile: gssc_db"
@@ -377,10 +532,6 @@ curl -X DELETE "${SUPABASE_URL}/rest/v1/project_products?id=eq.${PRODUCT_ID}" \
 
 ## 3.1 Registrar imagen de producto
 
-Después de subir la imagen al Storage, registra la referencia en la tabla `product_images`.
-
-### Imagen cargada manualmente (upload)
-
 ```bash
 curl -X POST "${SUPABASE_URL}/rest/v1/product_images" \
   -H "apikey: ${SUPABASE_KEY}" \
@@ -389,150 +540,26 @@ curl -X POST "${SUPABASE_URL}/rest/v1/product_images" \
   -H "Content-Profile: gssc_db" \
   -H "Prefer: return=representation" \
   -d '{
-    "product_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "url": "product-images/550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-abcd-ef1234567890/1.png",
-    "position": 1,
-    "source": "upload"
-  }'
-```
-
-### Múltiples imágenes
-
-```bash
-# Imagen posición 2
-curl -X POST "${SUPABASE_URL}/rest/v1/product_images" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Content-Profile: gssc_db" \
-  -H "Prefer: return=representation" \
-  -d '{
-    "product_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "url": "product-images/550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-abcd-ef1234567890/2.png",
-    "position": 2,
-    "source": "upload"
-  }'
-
-# Imagen posición 3
-curl -X POST "${SUPABASE_URL}/rest/v1/product_images" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Content-Profile: gssc_db" \
-  -H "Prefer: return=representation" \
-  -d '{
-    "product_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "url": "product-images/550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-abcd-ef1234567890/3.png",
-    "position": 3,
-    "source": "upload"
-  }'
-```
-
-### Imagen generada por editor online
-
-```bash
-curl -X POST "${SUPABASE_URL}/rest/v1/product_images" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Content-Profile: gssc_db" \
-  -H "Prefer: return=representation" \
-  -d '{
-    "product_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "url": "product-images/550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-abcd-ef1234567890/4.png",
+    "product_id": "'${MUG_9OZ_TIGRES_ID}'",
+    "url": "https://storage.example.com/product-images/'${PROJECT_ID}'/'${MUG_9OZ_TIGRES_ID}'/4.png",
     "position": 4,
-    "source": "online_editor"
+    "source": "upload"
   }'
 ```
-
-### Imagen generada por diseñador asistido
-
-```bash
-curl -X POST "${SUPABASE_URL}/rest/v1/product_images" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Content-Profile: gssc_db" \
-  -H "Prefer: return=representation" \
-  -d '{
-    "product_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "url": "product-images/550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-abcd-ef1234567890/5.png",
-    "position": 5,
-    "source": "designer_assisted"
-  }'
-```
-
----
 
 ## 3.2 Obtener imágenes de un producto
 
-### Todas las imágenes ordenadas por posición
-
 ```bash
-curl -X GET "${SUPABASE_URL}/rest/v1/product_images?product_id=eq.${PRODUCT_ID}&order=position.asc" \
+curl -X GET "${SUPABASE_URL}/rest/v1/product_images?product_id=eq.${MUG_9OZ_TIGRES_ID}&order=position.asc" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"
 ```
 
-### Imagen por ID
-
-```bash
-curl -X GET "${SUPABASE_URL}/rest/v1/product_images?id=eq.uuid-imagen-1" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Accept-Profile: gssc_db"
-```
-
----
-
-## 3.3 Editar imagen
-
-### Cambiar posición de una imagen
-
-```bash
-curl -X PATCH "${SUPABASE_URL}/rest/v1/product_images?id=eq.uuid-imagen-1" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Content-Profile: gssc_db" \
-  -H "Prefer: return=representation" \
-  -d '{
-    "position": 2
-  }'
-```
-
-### Actualizar URL de imagen
-
-```bash
-curl -X PATCH "${SUPABASE_URL}/rest/v1/product_images?id=eq.uuid-imagen-1" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Content-Profile: gssc_db" \
-  -H "Prefer: return=representation" \
-  -d '{
-    "url": "product-images/550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-abcd-ef1234567890/1-updated.png"
-  }'
-```
-
----
-
-## 3.4 Eliminar imagen
-
-Las imágenes sí pueden ser eliminadas (a diferencia de los productos).
+## 3.3 Eliminar imagen
 
 ```bash
 curl -X DELETE "${SUPABASE_URL}/rest/v1/product_images?id=eq.uuid-imagen-1" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Profile: gssc_db"
-```
-
-### Eliminar todas las imágenes de un producto
-
-```bash
-curl -X DELETE "${SUPABASE_URL}/rest/v1/product_images?product_id=eq.${PRODUCT_ID}" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Profile: gssc_db"
@@ -542,108 +569,285 @@ curl -X DELETE "${SUPABASE_URL}/rest/v1/product_images?product_id=eq.${PRODUCT_I
 
 # 4. Gestión de Archivos en Storage (product-images)
 
-El bucket `product-images` es **público**, por lo que las imágenes se pueden acceder directamente sin autenticación.
+El bucket `product-images` es **público**.
 
 ## 4.1 Subir imagen al Storage
 
-### Subir imagen PNG
-
 ```bash
-curl -X POST "${SUPABASE_URL}/storage/v1/object/product-images/${PROJECT_ID}/${PRODUCT_ID}/1.png" \
+curl -X POST "${SUPABASE_URL}/storage/v1/object/product-images/${PROJECT_ID}/${MUG_9OZ_TIGRES_ID}/1.png" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: image/png" \
   --data-binary @/ruta/local/imagen.png
 ```
 
-### Subir imagen JPEG
+## 4.2 Obtener URL pública
 
 ```bash
-curl -X POST "${SUPABASE_URL}/storage/v1/object/product-images/${PROJECT_ID}/${PRODUCT_ID}/2.jpg" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: image/jpeg" \
-  --data-binary @/ruta/local/imagen.jpg
+# URL directa (no requiere autenticación)
+curl -X GET "${SUPABASE_URL}/storage/v1/object/public/product-images/${PROJECT_ID}/${MUG_9OZ_TIGRES_ID}/1.png"
 ```
 
-### Subir imagen WebP
-
-```bash
-curl -X POST "${SUPABASE_URL}/storage/v1/object/product-images/${PROJECT_ID}/${PRODUCT_ID}/3.webp" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: image/webp" \
-  --data-binary @/ruta/local/imagen.webp
-```
-
----
-
-## 4.2 Actualizar imagen existente (upsert)
-
-```bash
-curl -X POST "${SUPABASE_URL}/storage/v1/object/product-images/${PROJECT_ID}/${PRODUCT_ID}/1.png" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: image/png" \
-  -H "x-upsert: true" \
-  --data-binary @/ruta/local/nueva-imagen.png
-```
-
----
-
-## 4.3 Obtener URL pública de imagen
-
-El bucket es público, por lo que las imágenes se acceden directamente:
-
-```bash
-# URL pública (no requiere autenticación)
-curl -X GET "${SUPABASE_URL}/storage/v1/object/public/product-images/${PROJECT_ID}/${PRODUCT_ID}/1.png"
-```
-
-**URL directa para usar en aplicaciones:**
-```
-${SUPABASE_URL}/storage/v1/object/public/product-images/{project_id}/{product_id}/{position}.{extension}
-```
-
----
-
-## 4.4 Listar archivos de un producto
+## 4.3 Listar archivos de un producto
 
 ```bash
 curl -X POST "${SUPABASE_URL}/storage/v1/object/list/product-images" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
-  -d '{
-    "prefix": "550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-abcd-ef1234567890/",
-    "limit": 100,
-    "offset": 0
-  }'
+  -d '{"prefix": "'${PROJECT_ID}'/'${MUG_9OZ_TIGRES_ID}'/", "limit": 100}'
 ```
 
----
-
-## 4.5 Eliminar imagen del Storage
+## 4.4 Eliminar imagen del Storage
 
 ```bash
-curl -X DELETE "${SUPABASE_URL}/storage/v1/object/product-images/${PROJECT_ID}/${PRODUCT_ID}/1.png" \
+curl -X DELETE "${SUPABASE_URL}/storage/v1/object/product-images/${PROJECT_ID}/${MUG_9OZ_TIGRES_ID}/1.png" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}"
 ```
 
-### Eliminar múltiples imágenes
+---
+
+# 5. Escenarios de Validación y Prueba
+
+## 5.1 Intentar modificar personalization_config (debe fallar)
 
 ```bash
-curl -X DELETE "${SUPABASE_URL}/storage/v1/object/product-images" \
+# ❌ El trigger prevent_personalization_config_change rechazará esto
+curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_TIGRES_ID}" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
+  -H "Prefer: return=representation" \
   -d '{
-    "prefixes": [
-      "550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-abcd-ef1234567890/1.png",
-      "550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-abcd-ef1234567890/2.png"
-    ]
+    "personalization_config": {
+      "sizes": {"enabled": true, "options": ["S", "M", "L"], "price_modifier": 0}
+    }
   }'
+```
+
+**Resultado esperado:** Error 400 - "La configuración de personalización no puede ser modificada después de la creación del producto"
+
+## 5.2 Intentar modificar selected_attributes (debe fallar)
+
+```bash
+# ❌ El trigger prevent_selected_attributes_change rechazará esto
+curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_TIGRES_ID}" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
+  -H "Prefer: return=representation" \
+  -d '{
+    "selected_attributes": {
+      "quality": {"selected_option": "estandar", "price_modifier": 0}
+    }
+  }'
+```
+
+**Resultado esperado:** Error 400 - "Los atributos seleccionados no pueden ser modificados después de la creación del producto"
+
+## 5.3 Intentar eliminar un producto (debe fallar)
+
+```bash
+# ❌ El trigger prevent_product_deletion rechazará esto
+curl -X DELETE "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_TIGRES_ID}" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Profile: gssc_db"
+```
+
+**Resultado esperado:** Error 400 - "Los productos no pueden ser eliminados. Use status = 'inactive' para desactivar el producto."
+
+## 5.4 Crear producto sin glam_product_id (debe fallar)
+
+```bash
+# ❌ glam_product_id es obligatorio (NOT NULL)
+curl -X POST "${SUPABASE_URL}/rest/v1/project_products" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
+  -H "Prefer: return=representation" \
+  -d '{
+    "project_id": "b0000000-0000-0000-0000-000000000001",
+    "name": "Producto sin catálogo",
+    "price": 10000.00,
+    "personalization_config": {
+      "sizes": {"enabled": true, "options": ["S", "M", "L"], "price_modifier": 0}
+    }
+  }'
+```
+
+**Resultado esperado:** Error - null value in column "glam_product_id" violates not-null constraint
+
+## 5.5 Verificar datos de prueba cargados
+
+### Contar productos por proyecto
+
+```bash
+# Proyecto 1 (Tigres FC) - debe tener 4 productos
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID}&select=id" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db" \
+  -H "Prefer: count=exact"
+
+# Proyecto 2 (Colegio) - debe tener 3 productos
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID_2}&select=id" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db" \
+  -H "Prefer: count=exact"
+```
+
+### Verificar productos por estado
+
+```bash
+# Productos activos del proyecto 1 (debe ser 2: mug-9oz + mug-15oz)
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID}&status=eq.active&select=name,status" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+
+# Productos borrador (debe ser 1: termo-600ml)
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID}&status=eq.draft&select=name,status" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+
+# Productos inactivos (debe ser 1: termo-1000ml)
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID}&status=eq.inactive&select=name,status" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+### Verificar atributos de un producto del catálogo
+
+```bash
+# Atributos del mug-9oz (attributes_config JSONB)
+curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?code=eq.mug-9oz&select=code,name,base_price,attributes_config" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+### Verificar imágenes de productos activos
+
+```bash
+# Imágenes del mug 9oz Tigres (debe tener 3)
+curl -X GET "${SUPABASE_URL}/rest/v1/product_images?product_id=eq.${MUG_9OZ_TIGRES_ID}&order=position.asc&select=position,source,url" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+```
+
+---
+
+# 6. Flujo Completo de Creación de Producto
+
+Flujo end-to-end para crear un producto desde cero.
+
+```bash
+# ============================================================
+# PASO 1: Consultar categorías disponibles
+# ============================================================
+curl -X GET "${SUPABASE_URL}/rest/v1/product_categories?order=name.asc&select=id,code,name,allowed_modules" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+
+# ============================================================
+# PASO 2: Consultar productos del catálogo Glam para la categoría elegida
+# ============================================================
+curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?category_id=eq.${CATEGORY_ID}&is_active=eq.true&select=id,code,name,base_price,attributes_config" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+
+# ============================================================
+# PASO 3: Consultar módulos de personalización de la categoría
+# ============================================================
+curl -X GET "${SUPABASE_URL}/rest/v1/personalization_modules?order=name.asc" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Accept-Profile: gssc_db"
+
+# ============================================================
+# PASO 4: Crear el producto
+#   - glam_product_id: obligatorio (producto del catálogo elegido)
+#   - personalization_config: inmutable después de creación
+#   - selected_attributes: inmutable después de creación
+# ============================================================
+curl -X POST "${SUPABASE_URL}/rest/v1/project_products" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
+  -H "Prefer: return=representation" \
+  -d '{
+    "project_id": "'${PROJECT_ID}'",
+    "glam_product_id": "uuid-glam-product-mug9",
+    "name": "Mi Mug Personalizado",
+    "description": "Mug con diseño exclusivo",
+    "price": 15000.00,
+    "personalization_config": {
+      "sizes": {"enabled": true, "options": ["único"], "price_modifier": 0}
+    },
+    "selected_attributes": {
+      "quality": {"selected_option": "premium", "price_modifier": 3000}
+    }
+  }'
+# Guardar el ID retornado como NEW_PRODUCT_ID
+
+# ============================================================
+# PASO 5: Subir imágenes al Storage (mínimo 3)
+# ============================================================
+curl -X POST "${SUPABASE_URL}/storage/v1/object/product-images/${PROJECT_ID}/${NEW_PRODUCT_ID}/1.png" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: image/png" \
+  --data-binary @/ruta/local/frente.png
+
+curl -X POST "${SUPABASE_URL}/storage/v1/object/product-images/${PROJECT_ID}/${NEW_PRODUCT_ID}/2.png" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: image/png" \
+  --data-binary @/ruta/local/lateral.png
+
+curl -X POST "${SUPABASE_URL}/storage/v1/object/product-images/${PROJECT_ID}/${NEW_PRODUCT_ID}/3.png" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: image/png" \
+  --data-binary @/ruta/local/detalle.png
+
+# ============================================================
+# PASO 6: Registrar imágenes en la tabla product_images
+# ============================================================
+curl -X POST "${SUPABASE_URL}/rest/v1/product_images" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
+  -H "Prefer: return=representation" \
+  -d '[
+    {"product_id": "'${NEW_PRODUCT_ID}'", "url": "https://storage.example.com/product-images/'${PROJECT_ID}'/'${NEW_PRODUCT_ID}'/1.png", "position": 1, "source": "upload"},
+    {"product_id": "'${NEW_PRODUCT_ID}'", "url": "https://storage.example.com/product-images/'${PROJECT_ID}'/'${NEW_PRODUCT_ID}'/2.png", "position": 2, "source": "upload"},
+    {"product_id": "'${NEW_PRODUCT_ID}'", "url": "https://storage.example.com/product-images/'${PROJECT_ID}'/'${NEW_PRODUCT_ID}'/3.png", "position": 3, "source": "upload"}
+  ]'
+
+# ============================================================
+# PASO 7: Activar el producto
+# ============================================================
+curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${NEW_PRODUCT_ID}" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Content-Profile: gssc_db" \
+  -H "Prefer: return=representation" \
+  -d '{"status": "active"}'
 ```
 
 ---
@@ -655,104 +859,103 @@ curl -X DELETE "${SUPABASE_URL}/storage/v1/object/product-images" \
 - `active` - Activo (publicado, visible para compradores)
 - `inactive` - Inactivo (desactivado, no visible)
 
-## visual_mode (modos de representación visual)
+## visual_mode
 - `upload_images` - Carga manual de imágenes
 - `online_editor` - Editor online de diseño
 - `designer_assisted` - Diseño asistido por Glam Urban
 
-## personalization_module_code (módulos de personalización)
+## personalization_module_code
 - `sizes` - Selección de talla
 - `numbers` - Número deportivo (1-99)
 - `names` - Nombre personalizado
 - `age_categories` - Categoría de edad
 
-## product_image_source (origen de imágenes)
-- `upload` - Cargada manualmente por el organizador
-- `online_editor` - Generada por el editor online
-- `designer_assisted` - Generada por el diseñador de Glam Urban
+## product_image_source
+- `upload` - Cargada manualmente
+- `online_editor` - Generada por editor online
+- `designer_assisted` - Generada por diseñador
 
 ## Categorías disponibles
 
-| code | name | allowed_visual_modes | allowed_modules |
-|------|------|---------------------|-----------------|
-| `jersey` | Camiseta/Jersey | `upload_images`, `online_editor`, `designer_assisted` | `sizes`, `numbers`, `names` |
-| `shorts` | Shorts/Pantalón corto | `upload_images`, `online_editor`, `designer_assisted` | `sizes` |
-| `tracksuit` | Conjunto deportivo | `upload_images`, `designer_assisted` | `sizes`, `age_categories` |
-| `accessories` | Accesorios | `upload_images` | `sizes` |
+| code | name | allowed_modules |
+|------|------|-----------------|
+| `jersey` | Camiseta/Jersey | sizes, numbers, names |
+| `shorts` | Shorts/Pantalón corto | sizes |
+| `tracksuit` | Conjunto deportivo | sizes, age_categories |
+| `accessories` | Accesorios | sizes |
+| `mugs` | Mugs | sizes |
+| `termos` | Termos | sizes |
+
+## Atributos disponibles (catálogo)
+
+| code | name | opciones |
+|------|------|----------|
+| `quality` | Calidad | estandar, premium |
+| `color` | Color | blanco, negro, azul, rojo |
+| `material` | Material | ceramica, acero_inoxidable, plastico_bpa_free |
+
+## Productos del catálogo Glam Urban
+
+| code | name | base_price | attributes_config |
+|------|------|-----------|-------------------|
+| `mug-9oz` | Mug 9 oz | 15000 | quality (estándar: +0, premium: +3000) |
+| `mug-15oz` | Mug 15 oz | 18000 | quality (estándar: +0, premium: +3500) |
+| `termo-600ml` | Termo 600 ml | 35000 | quality (estándar: +0, premium: +5000) |
+| `termo-1000ml` | Termo 1000 ml | 45000 | quality (estándar: +0, premium: +6000) |
 
 ---
 
 # Estructura de personalization_config
 
-El campo `personalization_config` es un JSONB que almacena la configuración de cada módulo habilitado.
+## sizes (Selección de talla)
+```json
+{"sizes": {"enabled": true, "options": ["XS", "S", "M", "L", "XL", "XXL"], "price_modifier": 0}}
+```
 
-## Estructura por módulo
+## numbers (Número deportivo)
+```json
+{"numbers": {"enabled": true, "min": 1, "max": 99, "price_modifier": 5000}}
+```
 
-### sizes (Selección de talla)
+## names (Nombre personalizado)
+```json
+{"names": {"enabled": true, "max_length": 15, "price_modifier": 8000}}
+```
+
+## age_categories (Categoría de edad)
+```json
+{"age_categories": {"enabled": true, "options": ["infantil", "juvenil", "adulto"], "price_modifier": 0}}
+```
+
+## Ejemplo completo (para categorías que permiten múltiples módulos)
 ```json
 {
-  "sizes": {
-    "enabled": true,
-    "options": ["XS", "S", "M", "L", "XL", "XXL"],
-    "price_modifier": 0
-  }
+  "sizes": {"enabled": true, "options": ["XS", "S", "M", "L", "XL", "XXL"], "price_modifier": 0},
+  "numbers": {"enabled": true, "min": 1, "max": 99, "price_modifier": 5000},
+  "names": {"enabled": true, "max_length": 15, "price_modifier": 8000}
 }
 ```
 
-### numbers (Número deportivo)
+---
+
+# Estructura de selected_attributes
+
+## Ejemplo: solo calidad
+```json
+{"quality": {"selected_option": "premium", "price_modifier": 3000}}
+```
+
+## Ejemplo: calidad + material
 ```json
 {
-  "numbers": {
-    "enabled": true,
-    "min": 1,
-    "max": 99,
-    "price_modifier": 5000
-  }
+  "quality": {"selected_option": "estandar", "price_modifier": 0},
+  "material": {"selected_option": "acero_inoxidable", "price_modifier": 0}
 }
 ```
 
-### names (Nombre personalizado)
+## Ejemplo: vacío (sin atributos seleccionados)
 ```json
-{
-  "names": {
-    "enabled": true,
-    "max_length": 15,
-    "price_modifier": 8000
-  }
-}
-```
-
-### age_categories (Categoría de edad)
-```json
-{
-  "age_categories": {
-    "enabled": true,
-    "options": ["infantil", "juvenil", "adulto"],
-    "price_modifier": 0
-  }
-}
-```
-
-## Ejemplo completo (Jersey con todas las personalizaciones)
-```json
-{
-  "sizes": {
-    "enabled": true,
-    "options": ["XS", "S", "M", "L", "XL", "XXL"],
-    "price_modifier": 0
-  },
-  "numbers": {
-    "enabled": true,
-    "min": 1,
-    "max": 99,
-    "price_modifier": 5000
-  },
-  "names": {
-    "enabled": true,
-    "max_length": 15,
-    "price_modifier": 8000
-  }
-}
+{}
 ```
 
 ---
@@ -763,64 +966,40 @@ El campo `personalization_config` es un JSONB que almacena la configuración de 
 |-----------|-------|
 | **Nombre** | `product-images` |
 | **Público** | Sí |
-| **Límite de archivo** | 10MB |
-| **Tipos permitidos** | `image/jpeg`, `image/png`, `image/webp` |
-
-### Estructura de paths
-
-```
-product-images/
-  └── {project_id}/
-      └── {product_id}/
-          ├── 1.{extension}
-          ├── 2.{extension}
-          └── 3.{extension}
-
-Ejemplo: product-images/550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-abcd-ef1234567890/1.png
-```
+| **Límite** | 10MB |
+| **Tipos** | `image/jpeg`, `image/png`, `image/webp` |
 
 ---
 
-# Reglas de Negocio Importantes
+# Reglas de Negocio
 
-1. **Productos no eliminables:** Los productos solo se desactivan (`status = 'inactive'`), nunca se eliminan físicamente
-2. **Configuración inmutable:** El campo `personalization_config` NO puede modificarse después de la creación
-3. **Mínimo de imágenes:** Se requieren al menos 3 imágenes por producto (validación en capa de aplicación)
-4. **Validación de módulos:** Los módulos configurados deben estar permitidos por la categoría seleccionada
-5. **Catálogos cerrados:** Las categorías y módulos son gestionados exclusivamente por la plataforma
+1. **Producto siempre del catálogo:** `glam_product_id` es obligatorio (NOT NULL). Todo producto de proyecto deriva de un producto del catálogo Glam Urban
+2. **Categoría heredada:** La categoría se obtiene vía `glam_product → product_categories` (no existe `category_id` en `project_products`)
+3. **Productos no eliminables:** Solo se desactivan (`status = 'inactive'`)
+4. **Configuración inmutable:** `personalization_config` NO puede modificarse después de creación
+5. **Atributos inmutables:** `selected_attributes` NO puede modificarse después de creación
+6. **Mínimo de imágenes:** Al menos 3 imágenes por producto (validación en app)
+7. **Validación de módulos:** Los módulos configurados deben estar permitidos por la categoría (vía glam_product)
+8. **Atributos en JSONB:** Los atributos disponibles se almacenan en `glam_products.attributes_config`, las selecciones en `project_products.selected_attributes`
+9. **Precio final:** `price + sum(selected_attributes.price_modifier) + sum(personalization_price_modifiers)`
 
 ---
 
-# Flujo Típico de Creación de Producto
+# Datos de Prueba Disponibles
 
-1. **Consultar catálogos** - Obtener categorías y módulos disponibles
-2. **Crear producto** - Crear el producto con `personalization_config` (inmutable)
-3. **Subir imágenes al Storage** - Subir archivos al bucket `product-images`
-4. **Registrar imágenes** - Crear registros en `product_images` con las URLs
-5. **Activar producto** - Cambiar status a `active` cuando esté listo
+Los datos de prueba se cargan automáticamente con la migración `20260212100006_seed_test_data_products.sql`.
 
-```bash
-# Paso 1: Obtener categoría jersey
-curl -X GET "${SUPABASE_URL}/rest/v1/product_categories?code=eq.jersey" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Accept-Profile: gssc_db"
-
-# Paso 2: Crear producto (guardar el ID retornado)
-# ... (ver sección 2.1)
-
-# Paso 3: Subir imágenes al Storage
-# ... (ver sección 4.1)
-
-# Paso 4: Registrar imágenes en la tabla
-# ... (ver sección 3.1)
-
-# Paso 5: Activar producto
-curl -X PATCH "${SUPABASE_URL}/rest/v1/project_products?id=eq.${PRODUCT_ID}" \
-  -H "apikey: ${SUPABASE_KEY}" \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Content-Profile: gssc_db" \
-  -H "Prefer: return=representation" \
-  -d '{"status": "active"}'
-```
+| Tipo | ID | Descripción | Estado |
+|------|----|-------------|--------|
+| User | `a0..01` | Carlos Organizer | Active |
+| User | `a0..02` | Maria Buyer | Active |
+| User | `a0..03` | Pedro Organizer 2 | Active |
+| Project | `b0..01` | Tigres FC 2026 | active |
+| Project | `b0..02` | Colegio San José Gifts | active |
+| Product | `c0..01` | Mug 9 oz - Tigres FC | **active** (mug-9oz) |
+| Product | `c0..02` | Mug 15 oz - Tigres FC | **active** (mug-15oz) |
+| Product | `c0..03` | Termo 600ml - Tigres FC | **draft** (termo-600ml) |
+| Product | `c0..04` | Termo 1000ml - Tigres FC | **inactive** (termo-1000ml) |
+| Product | `c0..05` | Mug 9 oz - Colegio | **active** (mug-9oz) |
+| Product | `c0..06` | Termo 600ml - Colegio | **draft** (termo-600ml) |
+| Product | `c0..07` | Mug 15 oz - Profesores | **active** (mug-15oz) |

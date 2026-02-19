@@ -5,7 +5,6 @@ import { getProjectClient } from "@/lib/http/project"
 import {
   validateProductName,
   validateBasePrice,
-  validateModulesForCategory,
   isValidProductStatusTransition,
   canActivateProduct,
   toUpdateProductDTO,
@@ -222,29 +221,12 @@ export async function PATCH(
       }
     }
 
-    // Validar que personalization_config solo se modifique si el producto está en draft
-    if (input.personalizationConfig !== undefined && currentProduct.status !== "draft") {
+    // personalization_config es inmutable después de la creación (spec)
+    if (input.personalizationConfig !== undefined) {
       return NextResponse.json(
-        { success: false, error: "La configuración de personalización no puede modificarse en productos que no están en borrador" },
+        { success: false, error: "La configuración de personalización no puede modificarse después de la creación" },
         { status: 400 }
       )
-    }
-
-    // Validar módulos de personalización si se están actualizando
-    if (input.personalizationConfig !== undefined) {
-      const category = await productClient.getCategoryById(currentProduct.category_id)
-      if (category) {
-        const modulesValidation = validateModulesForCategory(
-          input.personalizationConfig,
-          category.allowed_modules
-        )
-        if (!modulesValidation.valid) {
-          return NextResponse.json(
-            { success: false, error: modulesValidation.error },
-            { status: 400 }
-          )
-        }
-      }
     }
 
     // Validar transición de estado si se está cambiando

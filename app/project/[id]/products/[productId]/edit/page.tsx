@@ -64,8 +64,14 @@ async function getProductData(idOrPublicCode: string, productId: string, userId:
       return toProductImage(img, publicUrl)
     })
     
-    // Obtener categoría del producto
-    const productCategory = categories.find(c => c.id === backendProduct.category_id)
+    // Obtener categoría (desde category_id o vía glam_product)
+    let productCategory = categories.find(c => c.id === backendProduct.category_id)
+    if (!productCategory && backendProduct.glam_product_id) {
+      const glamProduct = await productClient.getGlamProductById(backendProduct.glam_product_id)
+      if (glamProduct) {
+        productCategory = categories.find(c => c.id === glamProduct.category_id)
+      }
+    }
     
     const product = toProduct(backendProduct, images, productCategory)
     
@@ -184,6 +190,7 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
             categories={categories}
             modules={modules}
             isConfigEditable={isConfigEditable}
+            project={{ commission: project.commission }}
           />
         </div>
       </div>
