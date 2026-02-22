@@ -1,7 +1,7 @@
 /**
  * Tipos del dominio de Productos
  * 
- * Basado en spec.md v1.0 - Creación de Productos
+ * Basado en spec.md v2.1 - Creación de Productos
  * Alineado con backend Supabase (tablas project_products, product_categories, 
  * personalization_modules, product_images)
  */
@@ -241,7 +241,7 @@ export interface CreateProductDTO {
   project_id: string
   glam_product_id: string
   name: string
-  description?: string
+  description: string
   price: number
   personalization_config: PersonalizationConfig
   selected_attributes: SelectedAttributes
@@ -283,7 +283,7 @@ export interface UpdateProductImageDTO {
 export interface CreateProductInput {
   glamProductId: string
   name: string
-  description?: string
+  description: string
   price: number
   personalizationConfig: PersonalizationConfig
   selectedAttributes?: SelectedAttributes
@@ -561,6 +561,33 @@ export function validateProductName(name: string): { valid: boolean; error?: str
 }
 
 /**
+ * Valida la descripción del producto (RN-19: obligatoria)
+ */
+export function validateProductDescription(description: string): { valid: boolean; error?: string } {
+  const trimmed = description.trim()
+  
+  if (!trimmed) {
+    return { valid: false, error: "La descripción del producto es obligatoria" }
+  }
+  
+  if (trimmed.length > MAX_PRODUCT_DESCRIPTION_LENGTH) {
+    return { valid: false, error: `La descripción no puede exceder ${MAX_PRODUCT_DESCRIPTION_LENGTH} caracteres` }
+  }
+  
+  return { valid: true }
+}
+
+/**
+ * Valida que se haya seleccionado una categoría (RN-43)
+ */
+export function validateCategory(categoryId: string | null | undefined): { valid: boolean; error?: string } {
+  if (!categoryId) {
+    return { valid: false, error: "Selecciona una categoría de producto" }
+  }
+  return { valid: true }
+}
+
+/**
  * Valida el precio base (RN-09)
  */
 export function validateBasePrice(price: number | undefined): { valid: boolean; error?: string } {
@@ -769,7 +796,7 @@ export function toCreateProductDTO(
     project_id: projectId,
     glam_product_id: input.glamProductId,
     name: input.name.trim(),
-    description: input.description?.trim(),
+    description: input.description.trim(),
     price: input.price,
     personalization_config: input.personalizationConfig,
     selected_attributes: input.selectedAttributes ?? {},
@@ -836,6 +863,40 @@ export function createDefaultModuleConfig(
         price_modifier: 0,
       }
   }
+}
+
+/**
+ * Construye personalization_config con todos los módulos permitidos por la categoría,
+ * cada uno con enabled: false por defecto (RN-44, RN-45).
+ * Garantiza que el formulario siempre envíe todos los módulos de la categoría.
+ */
+export function buildDefaultPersonalizationConfig(
+  allowedModules: PersonalizationModuleCode[]
+): PersonalizationConfig {
+  const config: PersonalizationConfig = {}
+  for (const moduleCode of allowedModules) {
+    const defaultConfig = createDefaultModuleConfig(moduleCode)
+    config[moduleCode] = { ...defaultConfig, enabled: false } as typeof defaultConfig
+  }
+  return config
+}
+
+/**
+ * Completa un personalization_config existente para que incluya TODOS los módulos
+ * permitidos por la categoría (RN-45). Los módulos no presentes se agregan con enabled: false.
+ */
+export function ensureAllModulesPresent(
+  config: PersonalizationConfig,
+  allowedModules: PersonalizationModuleCode[]
+): PersonalizationConfig {
+  const result = { ...config }
+  for (const moduleCode of allowedModules) {
+    if (!result[moduleCode]) {
+      const defaultConfig = createDefaultModuleConfig(moduleCode)
+      result[moduleCode] = { ...defaultConfig, enabled: false } as typeof defaultConfig
+    }
+  }
+  return result
 }
 
 /**

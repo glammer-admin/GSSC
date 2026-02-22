@@ -55,7 +55,9 @@ export function BasicInfoSection({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="product-description">Descripción</Label>
+        <Label htmlFor="product-description">
+          Descripción <span className="text-destructive">*</span>
+        </Label>
         <Textarea
           id="product-description"
           value={description}
@@ -68,7 +70,7 @@ export function BasicInfoSection({
         />
         <div className="flex justify-between text-xs">
           <span className={errors.description ? "text-destructive" : "text-muted-foreground"}>
-            {errors.description || "Descripción opcional del producto"}
+            {errors.description || "Descripción del producto para los compradores"}
           </span>
           <span className="text-muted-foreground">
             {description.length}/{MAX_PRODUCT_DESCRIPTION_LENGTH}

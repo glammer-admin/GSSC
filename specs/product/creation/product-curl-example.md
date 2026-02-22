@@ -214,6 +214,7 @@ curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?code=eq.mug-9oz" \
         "price_modifier": {"estándar": 0, "premium": 3000}
       }
     },
+    "image_url": "/storage/v1/object/public/product-images/glam_products/mug-9oz.png",
     "is_active": true,
     "created_at": "2026-02-11T00:00:00.000Z",
     "updated_at": "2026-02-11T00:00:00.000Z"
@@ -230,7 +231,7 @@ Los atributos disponibles y sus precios se almacenan directamente en `glam_produ
 ```bash
 GLAM_PRODUCT_ID="uuid-glam-product-mug9"
 
-curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?id=eq.${GLAM_PRODUCT_ID}&select=id,code,name,base_price,attributes_config" \
+curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?id=eq.${GLAM_PRODUCT_ID}&select=id,code,name,base_price,attributes_config,image_url" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"
@@ -249,7 +250,8 @@ curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?id=eq.${GLAM_PRODUCT_ID}&sele
         "options": ["estándar", "premium"],
         "price_modifier": {"estándar": 0, "premium": 3000}
       }
-    }
+    },
+    "image_url": "/storage/v1/object/public/product-images/glam_products/mug-9oz.png"
   }
 ]
 ```
@@ -257,10 +259,51 @@ curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?id=eq.${GLAM_PRODUCT_ID}&sele
 ### Consulta SQL equivalente (para referencia)
 
 ```sql
-SELECT code, name, base_price, attributes_config
+SELECT code, name, base_price, attributes_config, image_url
 FROM gssc_db.glam_products
 WHERE id = 'uuid-glam-product-mug9';
 ```
+
+---
+
+## 1.7 Subir imagen de un producto del catálogo (glam_products)
+
+Las imágenes de glam_products se almacenan en el bucket `product-images` bajo la carpeta `glam_products/`.
+La convención de path es: `glam_products/{code}.{ext}`
+
+### Subir imagen
+
+```bash
+PRODUCT_CODE="mug-9oz"
+
+curl -X POST "${SUPABASE_URL}/storage/v1/object/product-images/glam_products/${PRODUCT_CODE}.png" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "Content-Type: image/png" \
+  -H "x-upsert: true" \
+  --data-binary "@/path/to/mug-9oz.png"
+```
+
+### Actualizar image_url en el registro
+
+```bash
+curl -X PATCH "${SUPABASE_URL}/rest/v1/glam_products?code=eq.${PRODUCT_CODE}" \
+  -H "apikey: ${SUPABASE_KEY}" \
+  -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+  -H "Content-Profile: gssc_db" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image_url": "/storage/v1/object/public/product-images/glam_products/mug-9oz.png"
+  }'
+```
+
+### Obtener URL pública de la imagen
+
+```
+${SUPABASE_URL}/storage/v1/object/public/product-images/glam_products/mug-9oz.png
+```
+
+> **Nota:** El bucket `product-images` es público, por lo que las imágenes son accesibles sin autenticación vía la URL pública.
 
 ---
 
@@ -383,7 +426,7 @@ curl -X GET "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_TIGRES_ID}
 ### Con producto catálogo e imágenes (JOIN completo)
 
 ```bash
-curl -X GET "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_COLEGIO_ID}&select=*,glam_products(code,name,base_price,attributes_config,product_categories(code,name,allowed_modules)),product_images(id,url,position,source)" \
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_COLEGIO_ID}&select=*,glam_products(code,name,base_price,attributes_config,image_url,product_categories(code,name,allowed_modules)),product_images(id,url,position,source)" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"
@@ -407,6 +450,7 @@ curl -X GET "${SUPABASE_URL}/rest/v1/project_products?id=eq.${MUG_9OZ_COLEGIO_ID
       "name": "Mug 9 oz",
       "base_price": 15000.00,
       "attributes_config": {"quality": {"options": ["estándar", "premium"], "price_modifier": {"estándar": 0, "premium": 3000}}},
+      "image_url": "/storage/v1/object/public/product-images/glam_products/mug-9oz.png",
       "product_categories": {
         "code": "mugs",
         "name": "Mugs",
@@ -458,7 +502,7 @@ curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID
 ### Con imágenes y datos del catálogo (join)
 
 ```bash
-curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID}&select=*,glam_products(code,name,base_price),product_images(id,url,position,source)&order=created_at.desc" \
+curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID}&select=*,glam_products(code,name,base_price,image_url),product_images(id,url,position,source)&order=created_at.desc" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"
@@ -728,7 +772,7 @@ curl -X GET "${SUPABASE_URL}/rest/v1/project_products?project_id=eq.${PROJECT_ID
 
 ```bash
 # Atributos del mug-9oz (attributes_config JSONB)
-curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?code=eq.mug-9oz&select=code,name,base_price,attributes_config" \
+curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?code=eq.mug-9oz&select=code,name,base_price,attributes_config,image_url" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"
@@ -762,7 +806,7 @@ curl -X GET "${SUPABASE_URL}/rest/v1/product_categories?order=name.asc&select=id
 # ============================================================
 # PASO 2: Consultar productos del catálogo Glam para la categoría elegida
 # ============================================================
-curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?category_id=eq.${CATEGORY_ID}&is_active=eq.true&select=id,code,name,base_price,attributes_config" \
+curl -X GET "${SUPABASE_URL}/rest/v1/glam_products?category_id=eq.${CATEGORY_ID}&is_active=eq.true&select=id,code,name,base_price,attributes_config,image_url" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Accept-Profile: gssc_db"

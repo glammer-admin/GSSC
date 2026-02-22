@@ -24,9 +24,11 @@ import { CostSummarySection } from "./cost-summary-section"
 import { ConfirmCancelModal } from "./confirm-cancel-modal"
 import {
   validateProductName,
+  validateProductDescription,
   validateModulesForCategory,
   canActivateProduct,
-  createEmptyPersonalizationConfig,
+  buildDefaultPersonalizationConfig,
+  ensureAllModulesPresent,
 } from "@/lib/types/product/types"
 import type {
   Product,
@@ -75,7 +77,7 @@ export function ProductForm({
   const [description, setDescription] = useState(product?.description || "")
   const [basePrice, setBasePrice] = useState<number | undefined>(product?.basePrice)
   const [personalizationConfig, setPersonalizationConfig] = useState<PersonalizationConfigType>(
-    product?.personalizationConfig || createEmptyPersonalizationConfig()
+    product?.personalizationConfig || {}
   )
   const [images, setImages] = useState<ProductImage[]>(product?.images || [])
   const [status, setStatus] = useState<ProductStatus>(product?.status || "draft")
@@ -138,7 +140,7 @@ export function ProductForm({
     name: product?.name || "",
     description: product?.description || "",
     basePrice: product?.basePrice,
-    personalizationConfig: product?.personalizationConfig || createEmptyPersonalizationConfig(),
+    personalizationConfig: product?.personalizationConfig || {},
     status: product?.status || "draft",
   }), [product])
 
@@ -165,10 +167,14 @@ export function ProductForm({
     setCategoryId(newCategoryId)
     setGlamProductId(undefined)
     setSelectedAttributes({})
-    if (newCategoryId !== categoryId) {
-      setPersonalizationConfig(createEmptyPersonalizationConfig())
-    }
-  }, [categoryId])
+    setBasePrice(undefined)
+    const newCategory = categories.find(c => c.id === newCategoryId)
+    setPersonalizationConfig(
+      newCategory
+        ? buildDefaultPersonalizationConfig(newCategory.allowedModules)
+        : {}
+    )
+  }, [categories])
 
   const handleGlamProductSelect = useCallback((gp: GlamProduct) => {
     setGlamProductId(gp.id)
@@ -176,8 +182,10 @@ export function ProductForm({
     setDescription(gp.description ?? "")
     setBasePrice(gp.basePrice)
     setSelectedAttributes({})
-    setPersonalizationConfig(createEmptyPersonalizationConfig())
-  }, [])
+    if (selectedCategory) {
+      setPersonalizationConfig(buildDefaultPersonalizationConfig(selectedCategory.allowedModules))
+    }
+  }, [selectedCategory])
 
   const handlePersonalizationChange = useCallback((config: PersonalizationConfigType) => {
     setPersonalizationConfig(config)
@@ -211,6 +219,12 @@ export function ProductForm({
       isValid = false
     }
 
+    const descriptionValidation = validateProductDescription(description)
+    if (!descriptionValidation.valid) {
+      newErrors.description = descriptionValidation.error
+      isValid = false
+    }
+
     if (selectedCategory && personalizationConfig) {
       const modulesValidation = validateModulesForCategory(
         personalizationConfig,
@@ -236,7 +250,7 @@ export function ProductForm({
 
     setErrors(newErrors)
     return isValid
-  }, [categoryId, glamProductId, name, basePrice, product?.basePrice, selectedCategory, personalizationConfig, status, images.length, isEditMode])
+  }, [categoryId, glamProductId, name, description, basePrice, product?.basePrice, selectedCategory, personalizationConfig, status, images.length, isEditMode])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -253,10 +267,13 @@ export function ProductForm({
       const method = isEditMode ? "PATCH" : "POST"
 
       const priceForSubmit = basePrice ?? product?.basePrice ?? 0
+      const fullPersonalizationConfig = selectedCategory
+        ? ensureAllModulesPresent(personalizationConfig, selectedCategory.allowedModules)
+        : personalizationConfig
       const bodyData = isEditMode
         ? {
             name: name.trim(),
-            description: description.trim() || undefined,
+            description: description.trim(),
             basePrice: priceForSubmit,
             status,
           }
@@ -264,9 +281,9 @@ export function ProductForm({
             projectId,
             glamProductId: glamProductId!,
             name: name.trim(),
-            description: description.trim() || undefined,
+            description: description.trim(),
             price: priceForSubmit,
-            personalizationConfig,
+            personalizationConfig: fullPersonalizationConfig,
             selectedAttributes,
           }
 
@@ -466,18 +483,20 @@ export function ProductForm({
           </Card>
         )}
 
-        {/* Precio tentativo (solo lectura) */}
-        {basePrice !== undefined && basePrice > 0 && project && (
+        {/* Precio tentativo (solo lectura) - RN-41: muestra $0 si no hay producto seleccionado */}
+        {project && (
           <Card>
             <CardHeader>
               <CardTitle>Precio tentativo del producto</CardTitle>
               <CardDescription>
-                Detalle del precio base, recargos por atributos, comisión del proyecto, IVA y total aproximado.
+                {glamProductId || isEditMode
+                  ? "Detalle del precio base, recargos por atributos, comisión del proyecto, IVA y total aproximado."
+                  : "Selecciona un producto del catálogo para ver el desglose de precio."}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <CostSummarySection
-                basePrice={basePrice}
+                basePrice={basePrice ?? 0}
                 attributesSurcharge={attributesSurcharge}
                 commissionPercent={project.commission}
               />

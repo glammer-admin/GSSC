@@ -105,9 +105,11 @@ Este módulo permite a los **organizadores** crear productos dentro de sus proye
 - **RN-01:** Las categorías de producto son un catálogo cerrado gestionado exclusivamente por la plataforma
 - **RN-02:** Los productos del catálogo (`glam_products`) son gestionados exclusivamente por la plataforma
 - **RN-03:** Todo producto de proyecto **debe** derivar de un producto del catálogo (`glam_product_id` es obligatorio, NOT NULL)
+- **RN-43:** La selección de categoría es obligatoria; no se puede guardar un producto sin haber seleccionado una categoría
 - **RN-04:** La categoría del producto de proyecto se hereda del producto del catálogo (`glam_product → category_id`); no existe `category_id` en `project_products`
 - **RN-05:** Cada categoría define qué módulos de personalización están permitidos (`allowed_modules`)
 - **RN-06:** Cada categoría define qué modos visuales están permitidos (`allowed_visual_modes`)
+- **RN-42:** Al cambiar la categoría en el formulario de creación, se debe reiniciar completamente la selección: se limpia el producto del catálogo seleccionado (`glam_product`), se limpian los atributos seleccionados (`selected_attributes`), se limpian los módulos de personalización configurados, y todos los precios (base, recargos, tentativo) vuelven a `0`
 
 ### Atributos
 
@@ -124,13 +126,16 @@ Este módulo permite a los **organizadores** crear productos dentro de sus proye
 - **RN-14:** Los módulos configurados en un producto DEBEN estar dentro de los `allowed_modules` de su categoría
 - **RN-15:** Un producto puede no tener módulos de personalización habilitados (producto estándar)
 - **RN-16:** Los módulos de personalización **no afectan** el precio del producto (price_modifier informativo, MVP: 0)
+- **RN-44:** Los módulos de personalización permitidos por la categoría deben presentarse con un valor por defecto al cargar el formulario (`enabled: false` por defecto)
+- **RN-45:** El formulario debe enviar siempre un valor para cada módulo de personalización disponible según la categoría, incluso si el valor es `enabled: false`; no se permite omitir módulos del payload
 
 ### Creación y Configuración
 
 - **RN-17:** Todo producto se crea inicialmente en estado `draft` (borrador)
 - **RN-18:** Un producto pertenece a un único proyecto y no puede existir sin proyecto
-- **RN-19:** El nombre del producto es obligatorio y no puede estar vacío
+- **RN-19:** El nombre y la descripción del producto son obligatorios y no pueden estar vacíos
 - **RN-20:** El precio (`price`) es obligatorio y se toma del precio base del producto del catálogo seleccionado
+- **RN-41:** Mientras no se haya seleccionado un producto del catálogo, el precio del producto es `0` y la sección de precio tentativo muestra `$0`
 
 ### Inmutabilidad
 
@@ -280,11 +285,45 @@ Feature: Crear producto en borrador
     Then se muestra error "El nombre del producto es obligatorio"
     And el producto no se crea
 
+  Scenario: Error al crear producto sin descripción
+    Given el organizador está en la página de creación de producto
+    When deja la descripción vacía
+    And intenta guardar el producto
+    Then se muestra error "La descripción del producto es obligatoria"
+    And el producto no se crea
+
+  Scenario: Error al crear producto sin categoría
+    Given el organizador está en la página de creación de producto
+    When no selecciona ninguna categoría
+    And intenta guardar el producto
+    Then se muestra error "Selecciona una categoría de producto"
+    And el producto no se crea
+
   Scenario: Error al configurar módulo no permitido por categoría
     Given el organizador seleccionó un producto de la categoría "accessories" que solo permite "sizes"
     When intenta habilitar el módulo "numbers"
     Then el módulo "numbers" no está disponible para selección
     And solo se muestran los módulos permitidos por la categoría
+
+  Scenario: Módulos de personalización se envían siempre con valor por defecto
+    Given el organizador seleccionó un producto de la categoría "jersey"
+    And la categoría permite módulos "sizes", "numbers", "names"
+    And el organizador no habilita ningún módulo
+    When guarda el producto
+    Then personalization_config contiene los 3 módulos con enabled: false
+    And ningún módulo se omite del payload
+
+  Scenario: Cambiar de categoría reinicia selección completa
+    Given el organizador seleccionó la categoría "mugs"
+    And seleccionó el producto "Mug 9 oz" con precio base 15000
+    And seleccionó atributo "quality" = "premium" (+3000)
+    When cambia la categoría a "jersey"
+    Then se limpia la selección de producto del catálogo
+    And se limpian los atributos seleccionados (selected_attributes = {})
+    And se limpian los módulos de personalización
+    And el precio base vuelve a 0
+    And el precio tentativo muestra $0
+    And se listan los productos de la nueva categoría "jersey"
 ```
 
 ### 7.2 Caso de uso: Gestionar imágenes del producto
@@ -544,7 +583,7 @@ Feature: Validación de permisos
 - `project_id` (obligatorio): UUID del proyecto
 - `glam_product_id` (obligatorio): UUID del producto del catálogo Glam Urban
 - `name` (obligatorio): Nombre del producto (no vacío)
-- `description` (opcional): Descripción comercial
+- `description` (obligatorio): Descripción comercial (no vacía)
 - `price` (obligatorio): Precio del producto (tomado del precio base del glam_product)
 - `personalization_config` (obligatorio): Objeto JSON con configuración de módulos
 - `selected_attributes` (obligatorio): Objeto JSON con atributos seleccionados y sus price_modifier (puede ser `{}`)
@@ -565,6 +604,8 @@ Feature: Validación de permisos
 | Código lógico | Condición |
 |---------------|-----------|
 | PRODUCT_NAME_REQUIRED | Nombre vacío o no proporcionado |
+| PRODUCT_DESCRIPTION_REQUIRED | Descripción vacía o no proporcionada |
+| CATEGORY_REQUIRED | Categoría no seleccionada |
 | GLAM_PRODUCT_REQUIRED | glam_product_id no proporcionado |
 | GLAM_PRODUCT_NOT_FOUND | Producto del catálogo no existe o no activo |
 | CATEGORY_NOT_FOUND | Categoría del glam_product no existe |
@@ -692,6 +733,7 @@ Feature: Validación de permisos
 |---------|-------|---------|
 | v1.0 | 2026-01-22 | Documento inicial basado en descripción funcional |
 | v2.0 | 2026-02-11 | Incorpora productos del catálogo (`glam_products`), atributos (`selected_attributes`), flujo progresivo de creación, precio derivado del catálogo, cálculo de precio tentativo con recargos de atributos |
+| v2.1 | 2026-02-22 | Precio = 0 sin producto seleccionado (RN-41), reset completo al cambiar categoría (RN-42), categoría y descripción obligatorias (RN-43, RN-19 actualizada), módulos de personalización con valor por defecto y envío obligatorio (RN-44, RN-45) |
 
 ---
 
@@ -700,7 +742,7 @@ Feature: Validación de permisos
 Antes de aprobar este spec:
 - [x] Todos los comportamientos están en Gherkin
 - [x] No hay decisiones técnicas de implementación
-- [x] Las reglas de negocio están numeradas (RN-01 a RN-40)
+- [x] Las reglas de negocio están numeradas (RN-01 a RN-45)
 - [x] No hay ambigüedades
 - [x] El alcance está claro
 - [x] No hay ejemplos de código fuente
@@ -771,27 +813,51 @@ Antes de aprobar este spec:
 
 ## Anexo E: Estructura de personalization_config
 
+> **Regla de envío (RN-44, RN-45):** El formulario SIEMPRE envía todos los módulos permitidos por la categoría, incluso si no fueron habilitados. Los módulos no habilitados se envían con `enabled: false`.
+
 ```
+Ejemplo con módulos habilitados:
 {
   "sizes": {
-    "enabled": true/false,
+    "enabled": true,
     "options": ["XS", "S", "M", "L", "XL"],
     "price_modifier": 0
   },
   "numbers": {
-    "enabled": true/false,
+    "enabled": true,
     "min": 1,
     "max": 99,
     "price_modifier": 0
   },
   "names": {
-    "enabled": true/false,
+    "enabled": false,
     "max_length": 15,
     "price_modifier": 0
   },
   "age_categories": {
-    "enabled": true/false,
+    "enabled": false,
     "options": ["infantil", "juvenil", "adulto"],
+    "price_modifier": 0
+  }
+}
+
+Ejemplo con NINGÚN módulo habilitado (categoría "jersey"):
+El formulario SIEMPRE envía los 3 módulos con enabled: false:
+{
+  "sizes": {
+    "enabled": false,
+    "options": [],
+    "price_modifier": 0
+  },
+  "numbers": {
+    "enabled": false,
+    "min": 1,
+    "max": 99,
+    "price_modifier": 0
+  },
+  "names": {
+    "enabled": false,
+    "max_length": 15,
     "price_modifier": 0
   }
 }

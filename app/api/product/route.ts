@@ -4,8 +4,10 @@ import { getProductClient, HttpError, NetworkError } from "@/lib/http/product"
 import { getProjectClient } from "@/lib/http/project"
 import {
   validateProductName,
+  validateProductDescription,
   validateBasePrice,
   validateModulesForCategory,
+  ensureAllModulesPresent,
   toCreateProductDTO,
   toProduct,
   toProductCategory,
@@ -250,6 +252,14 @@ export async function POST(
       )
     }
 
+    const descriptionValidation = validateProductDescription(input.description ?? "")
+    if (!descriptionValidation.valid) {
+      return NextResponse.json(
+        { success: false, error: descriptionValidation.error },
+        { status: 400 }
+      )
+    }
+
     const productClient = getProductClient()
 
     const glamProduct = await productClient.getGlamProductById(input.glamProductId)
@@ -279,6 +289,13 @@ export async function POST(
           { status: 400 }
         )
       }
+    }
+
+    if (input.personalizationConfig) {
+      input.personalizationConfig = ensureAllModulesPresent(
+        input.personalizationConfig,
+        category.allowed_modules
+      )
     }
 
     const createDTO = toCreateProductDTO(input, projectId)

@@ -1,7 +1,7 @@
 # Plan de Implementación – Creación de Productos
 
 > **Documento técnico de implementación**  
-> Basado en `spec.md` v1.0  
+> Basado en `spec.md` v2.1  
 > Define **CÓMO** se implementará el sistema
 
 ---
@@ -112,9 +112,12 @@ export const ALLOWED_IMAGE_FORMATS = ["png", "jpg", "jpeg", "webp"]
 
 // Validaciones
 export function validateProductName(name: string): { valid: boolean; error?: string }
+export function validateProductDescription(description: string): { valid: boolean; error?: string }
 export function validateBasePrice(price: number): { valid: boolean; error?: string }
+export function validateCategory(categoryId: string | null): { valid: boolean; error?: string }
 export function canActivateProduct(product: Product): { valid: boolean; errors: string[] }
 export function isValidStatusTransition(current: ProductStatus, next: ProductStatus): boolean
+export function buildDefaultPersonalizationConfig(allowedModules: PersonalizationModuleCode[]): PersonalizationConfig
 
 // Transformaciones
 export function toProduct(backend: BackendProduct): Product
@@ -187,8 +190,13 @@ export function getProductStorageClient(): ProductStorageClient
 // POST /api/product - Crear producto
 // - Validar sesión y rol organizador
 // - Validar que el usuario es dueño del proyecto
+// - Validar nombre y descripción no vacíos (RN-19)
+// - Validar categoría seleccionada (RN-43)
+// - Validar glam_product_id proporcionado (RN-03)
 // - Validar categoría existe
 // - Validar módulos están permitidos por categoría
+// - Validar que personalization_config incluye todos los módulos de la categoría (RN-45)
+// - Precio = 0 si no hay glam_product seleccionado (RN-41)
 // - Crear producto en estado draft
 
 // GET /api/product?projectId=xxx - Listar productos del proyecto
@@ -259,20 +267,27 @@ export function getProductStorageClient(): ProductStorageClient
 
 - Client Component (`"use client"`)
 - Maneja estado del formulario
-- Secciones: Categoría → Info básica → Personalización → Imágenes → Estado
+- Secciones: Info básica → Categoría → Producto del catálogo → Atributos → Personalización → Precio tentativo → Imágenes → Estado
+- **Precio inicial = 0** (RN-41): Mientras no se seleccione un producto del catálogo, el precio es `0` y la sección de precio tentativo muestra `$0`
+- **Reset al cambiar categoría** (RN-42): Al cambiar la categoría seleccionada, se limpia: producto del catálogo, atributos seleccionados (`selected_attributes = {}`), módulos de personalización, y todos los precios vuelven a `0`
+- **Campos obligatorios** (RN-19, RN-43): Nombre, descripción, categoría y producto del catálogo son obligatorios para guardar
+- **Personalización siempre enviada** (RN-44, RN-45): Al guardar, `personalization_config` incluye todos los módulos permitidos por la categoría con su valor (por defecto `enabled: false`)
 - Validaciones en tiempo real
 - Submit a API Routes
 
 #### 2.4.2 Selector de categoría (`components/product/category-selector.tsx`)
 
-- Muestra categorías disponibles
-- Al seleccionar, actualiza módulos permitidos
-- Advertencia si cambia categoría con módulos configurados
+- Muestra categorías disponibles (selección obligatoria, RN-43)
+- Al seleccionar, actualiza módulos permitidos y lista de productos del catálogo
+- **Al cambiar categoría** (RN-42): ejecuta reset completo — limpia producto del catálogo seleccionado, atributos seleccionados, módulos de personalización, y todos los precios vuelven a `0`
+- Emite callback `onCategoryChange` que el formulario padre usa para ejecutar el reset
 
 #### 2.4.3 Configurador de personalización (`components/product/personalization-config.tsx`)
 
-- Muestra módulos permitidos por categoría
+- Muestra TODOS los módulos permitidos por categoría
+- **Valor por defecto** (RN-44): cada módulo se inicializa con `enabled: false` al cargar el formulario
 - Toggle para habilitar/deshabilitar cada módulo
+- **Envío obligatorio** (RN-45): al guardar, el formulario envía todos los módulos de la categoría en `personalization_config`, incluso los que tienen `enabled: false`; no se omite ningún módulo del payload
 - Configuración específica por módulo:
   - sizes: selector múltiple de opciones
   - numbers: rango min/max
@@ -346,8 +361,14 @@ Fase 1 (Fundamentos)
 
 | Validación | Ubicación | Momento |
 |------------|-----------|---------|
-| Nombre no vacío | Cliente + Servidor | Submit |
-| Precio > 0 | Cliente + Servidor | Submit |
+| Nombre no vacío (RN-19) | Cliente + Servidor | Submit |
+| Descripción no vacía (RN-19) | Cliente + Servidor | Submit |
+| Categoría seleccionada (RN-43) | Cliente + Servidor | Submit |
+| Producto del catálogo seleccionado (RN-03) | Cliente + Servidor | Submit |
+| Precio = 0 sin producto seleccionado (RN-41) | Cliente | Cambio de selección |
+| Reset completo al cambiar categoría (RN-42) | Cliente | Cambio de categoría |
+| Módulos con valor por defecto (RN-44) | Cliente | Carga de formulario |
+| Todos los módulos enviados en payload (RN-45) | Cliente + Servidor | Submit |
 | Módulos permitidos por categoría | Servidor | Submit |
 | Mínimo 3 imágenes para activar | Servidor | Cambio de estado |
 | Permisos de organizador | Servidor (Middleware + API) | Cada request |
@@ -359,17 +380,24 @@ Fase 1 (Fundamentos)
 
 Usar códigos de error definidos en spec:
 - `PRODUCT_NAME_REQUIRED`
+- `PRODUCT_DESCRIPTION_REQUIRED`
+- `CATEGORY_REQUIRED`
 - `PRODUCT_PRICE_INVALID`
+- `GLAM_PRODUCT_REQUIRED`
+- `GLAM_PRODUCT_NOT_FOUND`
 - `CATEGORY_NOT_FOUND`
 - `MODULE_NOT_ALLOWED`
 - `PROJECT_NOT_FOUND`
 - `PERMISSION_DENIED`
 - `CONFIG_IMMUTABLE`
+- `ATTRIBUTES_IMMUTABLE`
 - `INVALID_STATUS_TRANSITION`
 - `INSUFFICIENT_IMAGES`
 - `INVALID_IMAGE_FORMAT`
 - `IMAGE_TOO_LARGE`
+- `POSITION_DUPLICATE`
 - `MIN_IMAGES_REQUIRED`
+- `IMAGE_NOT_FOUND`
 
 ### 4.3 Transacciones y rollback
 
