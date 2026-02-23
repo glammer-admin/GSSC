@@ -201,6 +201,7 @@ export interface Product {
   categoryId: string
   category?: ProductCategory
   glamProductId?: string
+  glamProductImageUrl?: string
   name: string
   description?: string
   status: ProductStatus
@@ -449,7 +450,7 @@ export const MAX_PRODUCT_DESCRIPTION_LENGTH = 1000
 export const PRODUCT_STATUS_CONFIG = {
   draft: {
     label: "Borrador",
-    color: "gray",
+    color: "yellow",
     description: "Producto en configuración, no visible para compradores",
   },
   active: {
@@ -459,7 +460,7 @@ export const PRODUCT_STATUS_CONFIG = {
   },
   inactive: {
     label: "Inactivo",
-    color: "red",
+    color: "gray",
     description: "Producto desactivado, no visible para nuevos compradores",
   },
 } as const
@@ -773,15 +774,17 @@ export function toProductImage(backend: BackendProductImage, publicUrl: string):
 export function toProduct(
   backend: BackendProduct,
   images: ProductImage[] = [],
-  category?: ProductCategory
+  category?: ProductCategory,
+  glamProductImageUrl?: string
 ): Product {
   const price = backend.price ?? backend.base_price ?? 0
   return {
     id: backend.id,
     projectId: backend.project_id,
-    categoryId: backend.category_id || category?.id || "",
+    categoryId: category?.id || backend.category_id || "",
     category,
     glamProductId: backend.glam_product_id,
+    glamProductImageUrl,
     name: backend.name,
     description: backend.description,
     status: backend.status,

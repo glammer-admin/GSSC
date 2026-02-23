@@ -112,18 +112,27 @@ export async function GET(
     const backendCategories = await productClient.getCategories()
     const categoriesMap = new Map(backendCategories.map(c => [c.id, toProductCategory(c)]))
 
+    // Obtener glam_products para resolver categoría e imagen de fallback
+    const uniqueGlamIds = [...new Set(backendProducts.map(bp => bp.glam_product_id))]
+    const glamProducts = await Promise.all(
+      uniqueGlamIds.map(id => productClient.getGlamProductById(id))
+    )
+    const glamProductMap = new Map(
+      glamProducts.filter(Boolean).map(gp => [gp!.id, gp!])
+    )
+
     // Obtener imágenes de cada producto
     const productsWithImages = await Promise.all(
       backendProducts.map(async (bp) => {
         const backendImages = await productClient.getProductImages(bp.id)
         const images = backendImages.map(img => {
-          // Extraer extensión del URL
-          const extension = img.url.split(".").pop() || "png"
           const publicUrl = `${process.env.BACKEND_API_URL?.replace(/\/rest\/v1(\/.*)?$/, "")}/storage/v1/object/public/product-images/${img.url}`
           return toProductImage(img, publicUrl)
         })
         
-        return toProduct(bp, images, categoriesMap.get(bp.category_id))
+        const glamProduct = glamProductMap.get(bp.glam_product_id)
+        const category = glamProduct ? categoriesMap.get(glamProduct.category_id) : undefined
+        return toProduct(bp, images, category, glamProduct?.image_url)
       })
     )
 
