@@ -206,6 +206,7 @@ export interface Product {
   status: ProductStatus
   basePrice: number
   personalizationConfig: PersonalizationConfig
+  selectedAttributes: SelectedAttributes
   images: ProductImage[]
   createdAt: string
   updatedAt: string
@@ -249,13 +250,16 @@ export interface CreateProductDTO {
 
 /**
  * DTO para actualizar producto (PATCH)
- * Solo name, description, price, status (personalization_config y selected_attributes inmutables)
+ * Campos disponibles dependen del estado: draft (todos), active (name/description/status), inactive (solo status)
  */
 export interface UpdateProductDTO {
   name?: string
   description?: string
   price?: number
   status?: ProductStatus
+  personalization_config?: PersonalizationConfig
+  selected_attributes?: SelectedAttributes
+  glam_product_id?: string
 }
 
 /**
@@ -291,12 +295,16 @@ export interface CreateProductInput {
 
 /**
  * Input del formulario para actualizar producto
+ * Campos disponibles dependen del estado (RN-46, RN-47)
  */
 export interface UpdateProductInput {
   name?: string
   description?: string
   basePrice?: number
   status?: ProductStatus
+  personalizationConfig?: PersonalizationConfig
+  selectedAttributes?: SelectedAttributes
+  glamProductId?: string
 }
 
 // ============================================
@@ -771,7 +779,7 @@ export function toProduct(
   return {
     id: backend.id,
     projectId: backend.project_id,
-    categoryId: backend.category_id ?? "",
+    categoryId: backend.category_id || category?.id || "",
     category,
     glamProductId: backend.glam_product_id,
     name: backend.name,
@@ -779,6 +787,7 @@ export function toProduct(
     status: backend.status,
     basePrice: price,
     personalizationConfig: backend.personalization_config,
+    selectedAttributes: backend.selected_attributes ?? {},
     images,
     createdAt: backend.created_at,
     updatedAt: backend.updated_at,
@@ -819,6 +828,15 @@ export function toUpdateProductDTO(input: UpdateProductInput): UpdateProductDTO 
   }
   if (input.status !== undefined) {
     dto.status = input.status
+  }
+  if (input.personalizationConfig !== undefined) {
+    dto.personalization_config = input.personalizationConfig
+  }
+  if (input.selectedAttributes !== undefined) {
+    dto.selected_attributes = input.selectedAttributes
+  }
+  if (input.glamProductId !== undefined) {
+    dto.glam_product_id = input.glamProductId
   }
   return dto
 }

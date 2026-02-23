@@ -4,7 +4,8 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, RotateCcw } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import {
   PRODUCT_STATUS_CONFIG,
   VALID_PRODUCT_STATUS_TRANSITIONS,
@@ -20,10 +21,6 @@ interface StatusSectionProps {
   onChange: (status: ProductStatus) => void
 }
 
-/**
- * Sección de estado del producto
- * Permite cambiar entre draft, active e inactive
- */
 export function StatusSection({
   status,
   imageCount,
@@ -45,9 +42,52 @@ export function StatusSection({
     }
   }
 
+  // Inactive state: show reactivation UI
+  if (status === "inactive") {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Estado actual:</span>
+          <Badge variant={getStatusBadgeVariant(status)}>
+            {PRODUCT_STATUS_CONFIG[status].label}
+          </Badge>
+        </div>
+
+        {!canActivate && (
+          <Alert variant="default" className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800 dark:text-amber-200">
+              Necesitas al menos {MIN_IMAGES_FOR_ACTIVATION} imágenes para poder reactivar el producto.
+              Actualmente tienes {imageCount}.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="p-4 border rounded-lg bg-muted/50">
+          <p className="text-sm text-muted-foreground mb-3">
+            Este producto está inactivo y no es visible en la tienda. Puedes reactivarlo para que vuelva a estar disponible.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled || !canActivate}
+            onClick={() => onChange("active")}
+            className="gap-2"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Reactivar producto
+          </Button>
+        </div>
+
+        {error && (
+          <p className="text-sm text-destructive">{error}</p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
-      {/* Estado actual */}
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Estado actual:</span>
         <Badge variant={getStatusBadgeVariant(status)}>
@@ -55,7 +95,6 @@ export function StatusSection({
         </Badge>
       </div>
 
-      {/* Advertencia si no puede activar */}
       {status === "draft" && !canActivate && (
         <Alert variant="default" className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -66,7 +105,6 @@ export function StatusSection({
         </Alert>
       )}
 
-      {/* Selector de estado */}
       <RadioGroup
         value={status}
         onValueChange={(value) => onChange(value as ProductStatus)}
@@ -119,11 +157,9 @@ export function StatusSection({
         })}
       </RadioGroup>
 
-      {/* Información sobre transiciones */}
       {status !== "draft" && (
         <p className="text-xs text-muted-foreground">
           {status === "active" && "Puedes desactivar el producto para que deje de estar visible en la tienda."}
-          {status === "inactive" && "Puedes reactivar el producto para que vuelva a estar visible en la tienda."}
         </p>
       )}
 

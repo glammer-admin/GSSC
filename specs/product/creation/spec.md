@@ -2,7 +2,9 @@
 
 > **Documento normativo de comportamiento del sistema**  
 > Este archivo define **QUÉ debe hacer el sistema**, no **CÓMO se implementa**.  
-> Es la **fuente única de verdad** para planes, código, tests y AI Agents.
+> Es la **fuente única de verdad** para planes, código, tests y AI Agents.  
+> Para edición de productos, ver `specs/product/update/spec.md`.  
+> Para lista de productos, ver `specs/product/list/spec.md`.
 
 ---
 
@@ -32,7 +34,7 @@ Este módulo permite a los **organizadores** crear productos dentro de sus proye
 - Productos del catálogo Glam Urban como base obligatoria para todo producto de proyecto
 - Atributos configurables con modificadores de precio (calidad, material, etc.)
 - Control de calidad visual (mínimo 3 imágenes por producto activo)
-- Inmutabilidad de configuración y atributos para garantizar consistencia en pedidos
+- Gestión de imágenes del producto (subida manual, redirección a editor, mensaje designer assisted)
 
 ---
 
@@ -47,15 +49,14 @@ Este módulo permite a los **organizadores** crear productos dentro de sus proye
 - Configuración de módulos de personalización según categoría (no afectan precio)
 - Visualización de precio tentativo (precio base + recargos atributos + comisión + IVA)
 - Gestión de imágenes del producto (subida manual, redirección a editor, mensaje designer assisted)
-- Cambio de estado del producto (draft → active → inactive)
-- Validación de requisitos para activación (mínimo 3 imágenes)
-- Edición de productos en estado borrador
-- Desactivación de productos activos
 
 ### 2.2 Excluye (explícito)
 
 > Todo lo no listado aquí se considera fuera de alcance.
 
+- Edición de productos existentes (ver `specs/product/update/spec.md`)
+- Lista de productos del proyecto (ver `specs/product/list/spec.md`)
+- Cambio de estado del producto (ver `specs/product/update/spec.md`)
 - Creación/modificación de categorías de producto (solo plataforma)
 - Creación/modificación de módulos de personalización (solo plataforma)
 - Creación/modificación de productos del catálogo Glam Urban (solo plataforma)
@@ -63,8 +64,6 @@ Este módulo permite a los **organizadores** crear productos dentro de sus proye
 - Implementación del Online Editor (solo redirección a URL externa)
 - Flujo operativo de Designer Assisted (solo mensaje informativo)
 - Eliminación física de productos (solo desactivación)
-- Modificación de `personalization_config` después de activar el producto
-- Modificación de `selected_attributes` después de la creación del producto
 - Tienda pública de productos (fuera de alcance)
 - Gestión de pedidos/compras (fuera de alcance)
 
@@ -88,10 +87,10 @@ Este módulo permite a los **organizadores** crear productos dentro de sus proye
 | Producto del catálogo (glam_product) | Producto base del catálogo Glam Urban con precio base y atributos configurables |
 | Categoría | Tipo de producto definido por la plataforma que determina los productos del catálogo, módulos y modos visuales permitidos |
 | Atributo | Propiedad configurable de un producto del catálogo (calidad, material, color) con opciones y modificadores de precio |
-| Atributo seleccionado | Elección concreta de un atributo por el organizador, almacenada en `selected_attributes` (inmutable tras creación) |
+| Atributo seleccionado | Elección concreta de un atributo por el organizador, almacenada en `selected_attributes` |
 | Módulo de personalización | Opción configurable que el comprador puede elegir (tallas, números, nombres, categorías de edad) |
 | Modo visual | Método de generación de imágenes del producto (upload, online_editor, designer_assisted) |
-| Configuración de personalización | Objeto JSON inmutable que define qué módulos están habilitados y sus opciones |
+| Configuración de personalización | Objeto JSON que define qué módulos están habilitados y sus opciones |
 | Precio base | Precio del producto del catálogo Glam Urban (definido por la plataforma) |
 | Precio del producto | `price` almacenado en `project_products`, equivale al precio base del glam_product seleccionado |
 | Precio final tentativo | Precio base + recargos de atributos + comisión del proyecto + IVA |
@@ -116,7 +115,6 @@ Este módulo permite a los **organizadores** crear productos dentro de sus proye
 - **RN-07:** Los atributos disponibles se definen en `glam_products.attributes_config` (JSONB)
 - **RN-08:** Cada atributo tiene opciones y modificadores de precio por opción (`price_modifier`)
 - **RN-09:** Los atributos seleccionados se almacenan en `project_products.selected_attributes` (JSONB)
-- **RN-10:** `selected_attributes` es **inmutable** después de la creación del producto
 - **RN-11:** Un producto puede crearse sin atributos seleccionados (`selected_attributes: {}`) si el producto del catálogo no tiene atributos configurables
 - **RN-12:** Los recargos por atributos se suman al precio base para calcular el precio final tentativo
 
@@ -137,14 +135,6 @@ Este módulo permite a los **organizadores** crear productos dentro de sus proye
 - **RN-20:** El precio (`price`) es obligatorio y se toma del precio base del producto del catálogo seleccionado
 - **RN-41:** Mientras no se haya seleccionado un producto del catálogo, el precio del producto es `0` y la sección de precio tentativo muestra `$0`
 
-### Inmutabilidad
-
-- **RN-21:** La configuración de personalización (`personalization_config`) puede modificarse mientras el producto esté en `draft`
-- **RN-22:** Una vez el producto pasa a estado `active`, la configuración de personalización es INMUTABLE
-- **RN-23:** `selected_attributes` es INMUTABLE desde el momento de la creación (no se puede modificar nunca)
-- **RN-24:** Si el organizador requiere cambiar la configuración o atributos, debe desactivar el producto y crear uno nuevo
-- **RN-25:** Los productos NO pueden eliminarse físicamente, solo desactivarse
-
 ### Imágenes
 
 - **RN-26:** Todo producto activo debe tener mínimo 3 imágenes
@@ -154,14 +144,6 @@ Este módulo permite a los **organizadores** crear productos dentro de sus proye
 - **RN-30:** Las imágenes tienen un atributo `source` que indica su origen (upload, online_editor, designer_assisted)
 - **RN-31:** Las imágenes tienen una posición (`position`) que determina el orden de visualización
 - **RN-32:** La posición de imagen debe ser única por producto (no duplicados)
-
-### Estados y Transiciones
-
-- **RN-33:** Las transiciones de estado válidas son:
-  - `draft` → `active` (requiere mínimo 3 imágenes)
-  - `active` → `inactive`
-  - `inactive` → `active` (requiere mínimo 3 imágenes)
-- **RN-34:** No existe transición de `active` → `draft` ni de `inactive` → `draft`
 
 ### Permisos
 
@@ -177,27 +159,9 @@ Este módulo permite a los **organizadores** crear productos dentro de sus proye
 
 ---
 
-## 6. Estados del dominio
+## 6. Flujo de creación de producto
 
-| Estado | Descripción |
-|--------|-------------|
-| `draft` | Producto en configuración, no visible para compradores, personalización editable |
-| `active` | Producto publicado, visible en tienda, personalización y atributos inmutables |
-| `inactive` | Producto desactivado, no visible para nuevos compradores |
-
-### 6.1 Transiciones válidas
-
-| Estado actual | Evento | Nuevo estado | Condiciones |
-|---------------|--------|--------------|-------------|
-| `draft` | Activar | `active` | Mínimo 3 imágenes |
-| `active` | Desactivar | `inactive` | Ninguna |
-| `inactive` | Reactivar | `active` | Mínimo 3 imágenes |
-
----
-
-## 7. Flujo de creación de producto
-
-### 7.0 Flujo progresivo en el formulario
+### 6.0 Flujo progresivo en el formulario
 
 El formulario de creación presenta un flujo secuencial donde cada paso habilita el siguiente:
 
@@ -208,7 +172,7 @@ El formulario de creación presenta un flujo secuencial donde cada paso habilita
 5. **Personalización** (habilitado tras seleccionar producto): se configuran los módulos de personalización permitidos por la categoría; estos no afectan el precio
 6. **Precio tentativo** (solo lectura): muestra desglose de precio base, recargos atributos, comisión, IVA y total
 
-### 7.1 Caso de uso: Crear producto en borrador
+### 6.1 Caso de uso: Crear producto en borrador
 
 ```gherkin
 Feature: Crear producto en borrador
@@ -326,7 +290,7 @@ Feature: Crear producto en borrador
     And se listan los productos de la nueva categoría "jersey"
 ```
 
-### 7.2 Caso de uso: Gestionar imágenes del producto
+### 6.2 Caso de uso: Gestionar imágenes del producto
 
 ```gherkin
 Feature: Gestionar imágenes del producto
@@ -395,160 +359,7 @@ Feature: Gestionar imágenes del producto
     And la imagen no se sube
 ```
 
-### 7.3 Caso de uso: Editar producto en borrador
-
-```gherkin
-Feature: Editar producto en borrador
-  Como organizador
-  Quiero modificar mi producto antes de publicarlo
-  Para ajustar la configuración según mis necesidades
-
-  Background:
-    Given el organizador está autenticado
-    And tiene un producto en estado "draft"
-
-  Scenario: Editar información básica
-    Given el organizador está en la página de edición del producto
-    When modifica el nombre a "Mug 9 oz - Tigres FC Edición Especial"
-    And modifica la descripción
-    And guarda los cambios
-    Then el producto se actualiza con la nueva información
-    And se muestra mensaje de éxito
-
-  Scenario: Modificar configuración de personalización en borrador
-    Given el producto tiene módulo "sizes" habilitado con opciones ["S", "M", "L"]
-    When el organizador agrega la opción "XL"
-    And guarda los cambios
-    Then personalization_config se actualiza con la nueva opción
-    And el producto permanece en estado "draft"
-
-  Scenario: Deshabilitar módulo de personalización en borrador
-    Given el producto tiene módulos "sizes" y "numbers" habilitados
-    When el organizador deshabilita el módulo "numbers"
-    And guarda los cambios
-    Then personalization_config se actualiza sin el módulo "numbers"
-
-  Scenario: No se pueden modificar atributos seleccionados
-    Given el producto fue creado con selected_attributes {"quality": {"selected_option": "premium", "price_modifier": 3000}}
-    When el organizador intenta modificar los atributos seleccionados
-    Then la sección de atributos está deshabilitada
-    And se muestra mensaje indicando que los atributos son inmutables
-```
-
-### 7.4 Caso de uso: Activar producto
-
-```gherkin
-Feature: Activar producto (publicar)
-  Como organizador
-  Quiero activar mi producto
-  Para que esté disponible en la tienda
-
-  Background:
-    Given el organizador está autenticado
-    And tiene un producto en estado "draft"
-
-  Scenario: Activar producto con requisitos cumplidos
-    Given el producto tiene nombre, precio y al menos 3 imágenes
-    When el organizador activa el producto
-    Then el estado cambia a "active"
-    And personalization_config se vuelve inmutable
-    And se muestra mensaje de éxito
-
-  Scenario: Error al activar producto sin imágenes suficientes
-    Given el producto tiene solo 2 imágenes
-    When el organizador intenta activar el producto
-    Then se muestra error "El producto requiere mínimo 3 imágenes para ser activado"
-    And el producto permanece en estado "draft"
-
-  Scenario: Error al activar producto sin imágenes
-    Given el producto no tiene imágenes
-    When el organizador intenta activar el producto
-    Then se muestra error "El producto requiere mínimo 3 imágenes para ser activado"
-    And el producto permanece en estado "draft"
-```
-
-### 7.5 Caso de uso: Gestionar producto activo
-
-```gherkin
-Feature: Gestionar producto activo
-  Como organizador
-  Quiero gestionar mi producto publicado
-  Para mantener actualizada mi oferta
-
-  Background:
-    Given el organizador está autenticado
-    And tiene un producto en estado "active"
-
-  Scenario: Editar información básica de producto activo
-    Given el organizador está en la página de edición
-    When modifica el nombre o descripción
-    And guarda los cambios
-    Then la información básica se actualiza
-    And personalization_config NO se modifica
-    And selected_attributes NO se modifica
-
-  Scenario: Intentar modificar personalización de producto activo
-    Given el organizador está en la página de edición
-    Then la sección de personalización está deshabilitada
-    And se muestra mensaje "La configuración de personalización no puede modificarse en productos activos"
-
-  Scenario: Intentar modificar atributos de producto activo
-    Given el organizador está en la página de edición
-    Then la sección de atributos está deshabilitada
-    And los atributos seleccionados se muestran como solo lectura
-
-  Scenario: Agregar imagen a producto activo
-    Given el producto tiene 3 imágenes
-    When el organizador sube una nueva imagen
-    Then la imagen se agrega en la siguiente posición
-    And el producto ahora tiene 4 imágenes
-
-  Scenario: Eliminar imagen manteniendo mínimo
-    Given el producto tiene 4 imágenes
-    When el organizador elimina una imagen
-    Then la imagen se elimina
-    And el producto queda con 3 imágenes
-
-  Scenario: Error al eliminar imagen quedando bajo el mínimo
-    Given el producto tiene exactamente 3 imágenes
-    When el organizador intenta eliminar una imagen
-    Then se muestra error "No se puede eliminar. El producto activo requiere mínimo 3 imágenes"
-    And la imagen no se elimina
-
-  Scenario: Desactivar producto
-    Given el producto está activo
-    When el organizador desactiva el producto
-    Then el estado cambia a "inactive"
-    And se muestra mensaje de confirmación
-```
-
-### 7.6 Caso de uso: Reactivar producto inactivo
-
-```gherkin
-Feature: Reactivar producto inactivo
-  Como organizador
-  Quiero reactivar un producto desactivado
-  Para volver a ofrecerlo en la tienda
-
-  Background:
-    Given el organizador está autenticado
-    And tiene un producto en estado "inactive"
-
-  Scenario: Reactivar producto con requisitos cumplidos
-    Given el producto tiene al menos 3 imágenes
-    When el organizador reactiva el producto
-    Then el estado cambia a "active"
-    And personalization_config permanece igual (inmutable)
-    And selected_attributes permanece igual (inmutable)
-
-  Scenario: Error al reactivar sin imágenes suficientes
-    Given el producto tiene solo 2 imágenes (algunas fueron eliminadas)
-    When el organizador intenta reactivar
-    Then se muestra error "El producto requiere mínimo 3 imágenes para ser activado"
-    And el producto permanece en "inactive"
-```
-
-### 7.7 Caso de uso: Validación de permisos
+### 6.3 Caso de uso: Validación de permisos
 
 ```gherkin
 Feature: Validación de permisos
@@ -558,12 +369,12 @@ Feature: Validación de permisos
 
   Scenario: Organizador accede a producto de su proyecto
     Given el organizador tiene un proyecto con organizer_id igual a su user_id
-    When accede a crear/editar productos de ese proyecto
+    When accede a crear productos de ese proyecto
     Then se permite la operación
 
   Scenario: Organizador intenta acceder a producto de otro proyecto
     Given existe un proyecto con organizer_id diferente al user_id del organizador
-    When intenta crear/editar productos de ese proyecto
+    When intenta crear productos de ese proyecto
     Then se rechaza la operación con error 403
     And se muestra mensaje "No tiene permisos para gestionar este proyecto"
 
@@ -575,9 +386,9 @@ Feature: Validación de permisos
 
 ---
 
-## 8. Contratos funcionales (conceptuales)
+## 7. Contratos funcionales (conceptuales)
 
-### 8.1 Crear Producto
+### 7.1 Crear Producto
 
 **Entradas:**
 - `project_id` (obligatorio): UUID del proyecto
@@ -613,36 +424,7 @@ Feature: Validación de permisos
 | PROJECT_NOT_FOUND | Proyecto no existe |
 | PERMISSION_DENIED | Usuario no es organizador del proyecto |
 
-### 8.2 Actualizar Producto
-
-**Entradas:**
-- `product_id` (obligatorio): UUID del producto
-- `name` (opcional): Nuevo nombre
-- `description` (opcional): Nueva descripción
-- `personalization_config` (opcional): Nueva configuración (solo si draft)
-- `status` (opcional): Nuevo estado
-
-**Restricciones:**
-- Si producto está `active` o `inactive`, no se puede modificar `personalization_config`
-- `selected_attributes` NUNCA puede modificarse (inmutable tras creación)
-- Transiciones de estado deben ser válidas
-- Activación requiere mínimo 3 imágenes
-
-**Salidas:**
-- Producto actualizado
-
-**Errores de negocio:**
-
-| Código lógico | Condición |
-|---------------|-----------|
-| PRODUCT_NOT_FOUND | Producto no existe |
-| CONFIG_IMMUTABLE | Intento de modificar config en producto no-draft |
-| ATTRIBUTES_IMMUTABLE | Intento de modificar selected_attributes |
-| INVALID_STATUS_TRANSITION | Transición de estado no permitida |
-| INSUFFICIENT_IMAGES | Activación con menos de 3 imágenes |
-| PERMISSION_DENIED | Usuario no es organizador del proyecto |
-
-### 8.3 Gestionar Imágenes
+### 7.2 Gestionar Imágenes
 
 **Entradas (subir):**
 - `product_id` (obligatorio): UUID del producto
@@ -673,44 +455,41 @@ Feature: Validación de permisos
 
 ---
 
-## 9. Invariantes del sistema
+## 8. Invariantes del sistema (creación)
 
 - Un producto de proyecto SIEMPRE deriva de un producto del catálogo Glam Urban (`glam_product_id` NOT NULL)
 - Un producto SIEMPRE pertenece a exactamente un proyecto
 - La categoría de un producto SIEMPRE se obtiene vía `glam_product → category_id`
-- Un producto activo SIEMPRE tiene al menos 3 imágenes
-- La configuración de personalización de un producto activo NUNCA cambia
-- Los atributos seleccionados (`selected_attributes`) NUNCA cambian después de la creación
+- Todo producto se crea SIEMPRE en estado `draft`
 - Las posiciones de imágenes de un producto son SIEMPRE únicas
 - Un producto NUNCA se elimina físicamente de la base de datos
 
 ---
 
-## 10. Casos límite y excepciones
+## 9. Casos límite y excepciones
 
 - **Producto del catálogo sin atributos**: Válido, `selected_attributes` se almacena como `{}`
 - **Producto sin personalización**: Válido, se crea con `personalization_config` vacío o con módulos deshabilitados
 - **Categoría sin módulos permitidos**: El producto solo tiene información básica, atributos e imágenes
-- **Todas las imágenes de un producto activo eliminadas por error externo**: El sistema debe impedir reactivación hasta tener 3 imágenes
 - **Proyecto eliminado/desactivado**: Los productos asociados deben manejarse según reglas del proyecto (fuera de alcance)
 - **Imagen subida pero falla registro en BD**: Debe haber rollback o limpieza de Storage
 - **Producto del catálogo desactivado después de crear producto de proyecto**: El producto de proyecto sigue funcionando; la referencia es histórica
 
 ---
 
-## 11. Seguridad y permisos
+## 10. Seguridad y permisos
 
 | Actor | Acción permitida | Acción prohibida |
 |-------|------------------|------------------|
-| Organizador (dueño) | CRUD productos de sus proyectos | Acceder a productos de otros proyectos |
+| Organizador (dueño) | Crear productos en sus proyectos | Acceder a productos de otros proyectos |
 | Organizador (no dueño) | Ninguna | Cualquier operación en proyectos ajenos |
-| Buyer | Ninguna (MVP) | Crear/editar productos |
-| Supplier | Ninguna | Crear/editar productos |
+| Buyer | Ninguna (MVP) | Crear productos |
+| Supplier | Ninguna | Crear productos |
 | No autenticado | Ninguna | Cualquier operación |
 
 ---
 
-## 12. No-objetivos explícitos
+## 11. No-objetivos explícitos
 
 > Para evitar suposiciones de la AI.
 
@@ -727,17 +506,19 @@ Feature: Validación de permisos
 
 ---
 
-## 13. Versionado
+## 12. Versionado
 
 | Versión | Fecha | Cambios |
 |---------|-------|---------|
 | v1.0 | 2026-01-22 | Documento inicial basado en descripción funcional |
 | v2.0 | 2026-02-11 | Incorpora productos del catálogo (`glam_products`), atributos (`selected_attributes`), flujo progresivo de creación, precio derivado del catálogo, cálculo de precio tentativo con recargos de atributos |
 | v2.1 | 2026-02-22 | Precio = 0 sin producto seleccionado (RN-41), reset completo al cambiar categoría (RN-42), categoría y descripción obligatorias (RN-43, RN-19 actualizada), módulos de personalización con valor por defecto y envío obligatorio (RN-44, RN-45) |
+| v2.2 | 2026-02-22 | Formulario de edición con misma estructura que creación y restricciones por estado (RN-46 a RN-50) — contenido de edición separado a `specs/product/update/spec.md` |
+| v3.0 | 2026-02-22 | Separación de especificaciones: edición movida a `specs/product/update/spec.md`, lista movida a `specs/product/list/spec.md`. Este documento ahora contiene solo creación de productos |
 
 ---
 
-## 14. Checklist de validación (AI + Humano)
+## 13. Checklist de validación (AI + Humano)
 
 Antes de aprobar este spec:
 - [x] Todos los comportamientos están en Gherkin
@@ -746,14 +527,14 @@ Antes de aprobar este spec:
 - [x] No hay ambigüedades
 - [x] El alcance está claro
 - [x] No hay ejemplos de código fuente
-- [x] Estados y transiciones documentados
 - [x] Permisos y seguridad definidos
 - [x] Flujo progresivo de creación documentado
 - [x] Atributos y precio tentativo especificados
+- [x] Gestión de imágenes especificada
 
 ---
 
-## 15. Nota final para AI Agents
+## 14. Nota final para AI Agents
 
 - ❌ No inferir comportamiento no especificado
 - ❌ No modificar este archivo durante la implementación
@@ -763,6 +544,8 @@ Antes de aprobar este spec:
 - ✅ Seguir patrones existentes en `lib/types/project/types.ts` para tipos
 - ✅ Toda la gestión es Server-Side Rendering (SSR)
 - ✅ Referirse a `product-curl-example.md` para contratos de API detallados
+- ✅ Para edición de productos, ver `specs/product/update/spec.md`
+- ✅ Para lista de productos, ver `specs/product/list/spec.md`
 
 ---
 
