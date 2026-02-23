@@ -4,29 +4,34 @@ import { getProductClient, HttpError, NetworkError } from "@/lib/http/product"
 import { getProjectClient } from "@/lib/http/project"
 import {
   validateProductName,
+  validateProductDescription,
   validateBasePrice,
   validateModulesForCategory,
+  ensureAllModulesPresent,
   toCreateProductDTO,
   toProduct,
   toProductCategory,
   toProductImage,
+  toGlamProduct,
 } from "@/lib/types/product/types"
-import type { CreateProductInput, SaveProductResponse, ProductListResponse, CategoryListResponse } from "@/lib/types/product/types"
+import type { CreateProductInput, SaveProductResponse, ProductListResponse, CategoryListResponse, GlamProductListResponse } from "@/lib/types/product/types"
 
 // Configuración del runtime para Next.js App Router
 export const maxDuration = 60
 
 /**
  * GET /api/product
- * Lista productos de un proyecto o categorías
+ * Lista productos de un proyecto, categorías o productos del catálogo Glam Urban
  * 
  * Query params:
- * - projectId: ID del proyecto (para listar productos)
+ * - projectId: ID del proyecto (para listar productos del proyecto)
  * - categories: true (para listar categorías)
+ * - glamProducts: true (para listar productos del catálogo; requiere categoryId)
+ * - categoryId: ID de la categoría (obligatorio si glamProducts=true)
  */
 export async function GET(
   request: NextRequest
-): Promise<NextResponse<ProductListResponse | CategoryListResponse>> {
+): Promise<NextResponse<ProductListResponse | CategoryListResponse | GlamProductListResponse>> {
   try {
     // Validar sesión
     const session = await getSession()
@@ -41,6 +46,8 @@ export async function GET(
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get("projectId")
     const categoriesOnly = searchParams.get("categories") === "true"
+    const glamProductsOnly = searchParams.get("glamProducts") === "true"
+    const categoryId = searchParams.get("categoryId")
 
     const productClient = getProductClient()
 
@@ -52,6 +59,22 @@ export async function GET(
       return NextResponse.json({
         success: true,
         data: categories,
+      })
+    }
+
+    // Si se solicitan productos del catálogo Glam Urban por categoría
+    if (glamProductsOnly) {
+      if (!categoryId) {
+        return NextResponse.json(
+          { success: false, error: "El parámetro categoryId es obligatorio cuando glamProducts=true" },
+          { status: 400 }
+        )
+      }
+      const backendGlamProducts = await productClient.getGlamProductsByCategory(categoryId)
+      const glamProducts = backendGlamProducts.map(toGlamProduct)
+      return NextResponse.json({
+        success: true,
+        data: glamProducts,
       })
     }
 
@@ -89,18 +112,27 @@ export async function GET(
     const backendCategories = await productClient.getCategories()
     const categoriesMap = new Map(backendCategories.map(c => [c.id, toProductCategory(c)]))
 
+    // Obtener glam_products para resolver categoría e imagen de fallback
+    const uniqueGlamIds = [...new Set(backendProducts.map(bp => bp.glam_product_id))]
+    const glamProducts = await Promise.all(
+      uniqueGlamIds.map(id => productClient.getGlamProductById(id))
+    )
+    const glamProductMap = new Map(
+      glamProducts.filter(Boolean).map(gp => [gp!.id, gp!])
+    )
+
     // Obtener imágenes de cada producto
     const productsWithImages = await Promise.all(
       backendProducts.map(async (bp) => {
         const backendImages = await productClient.getProductImages(bp.id)
         const images = backendImages.map(img => {
-          // Extraer extensión del URL
-          const extension = img.url.split(".").pop() || "png"
           const publicUrl = `${process.env.BACKEND_API_URL?.replace(/\/rest\/v1(\/.*)?$/, "")}/storage/v1/object/public/product-images/${img.url}`
           return toProductImage(img, publicUrl)
         })
         
-        return toProduct(bp, images, categoriesMap.get(bp.category_id))
+        const glamProduct = glamProductMap.get(bp.glam_product_id)
+        const category = glamProduct ? categoriesMap.get(glamProduct.category_id) : undefined
+        return toProduct(bp, images, category, glamProduct?.image_url)
       })
     )
 
@@ -206,7 +238,21 @@ export async function POST(
       )
     }
 
-    // Validar nombre
+    if (!input.glamProductId) {
+      return NextResponse.json(
+        { success: false, error: "El campo glamProductId es obligatorio" },
+        { status: 400 }
+      )
+    }
+
+    const priceValidation = validateBasePrice(input.price)
+    if (!priceValidation.valid) {
+      return NextResponse.json(
+        { success: false, error: priceValidation.error },
+        { status: 400 }
+      )
+    }
+
     const nameValidation = validateProductName(input.name)
     if (!nameValidation.valid) {
       return NextResponse.json(
@@ -215,27 +261,32 @@ export async function POST(
       )
     }
 
-    // Validar precio
-    const priceValidation = validateBasePrice(input.basePrice)
-    if (!priceValidation.valid) {
+    const descriptionValidation = validateProductDescription(input.description ?? "")
+    if (!descriptionValidation.valid) {
       return NextResponse.json(
-        { success: false, error: priceValidation.error },
+        { success: false, error: descriptionValidation.error },
         { status: 400 }
       )
     }
 
     const productClient = getProductClient()
 
-    // Verificar que la categoría existe
-    const category = await productClient.getCategoryById(input.categoryId)
-    if (!category) {
+    const glamProduct = await productClient.getGlamProductById(input.glamProductId)
+    if (!glamProduct) {
       return NextResponse.json(
-        { success: false, error: "Categoría no encontrada" },
+        { success: false, error: "Producto del catálogo no encontrado" },
         { status: 400 }
       )
     }
 
-    // Validar que los módulos configurados están permitidos por la categoría
+    const category = await productClient.getCategoryById(glamProduct.category_id)
+    if (!category) {
+      return NextResponse.json(
+        { success: false, error: "Categoría del producto no encontrada" },
+        { status: 400 }
+      )
+    }
+
     if (input.personalizationConfig) {
       const modulesValidation = validateModulesForCategory(
         input.personalizationConfig,
@@ -249,11 +300,16 @@ export async function POST(
       }
     }
 
-    // Crear producto en backend
+    if (input.personalizationConfig) {
+      input.personalizationConfig = ensureAllModulesPresent(
+        input.personalizationConfig,
+        category.allowed_modules
+      )
+    }
+
     const createDTO = toCreateProductDTO(input, projectId)
     const backendProduct = await productClient.createProduct(createDTO)
 
-    // Transformar a formato frontend
     const product = toProduct(backendProduct, [], toProductCategory(category))
 
     console.log(`✅ [API PRODUCT] Product created: ${product.id}`)

@@ -4,7 +4,14 @@ import { getSession, isCompleteSession } from "@/lib/auth/session-manager"
 import { getProjectClient } from "@/lib/http/project"
 import { getProductClient, getProductStorageClient } from "@/lib/http/product"
 import { toProject } from "@/lib/types/project/types"
-import { toProduct, toProductCategory, toPersonalizationModule, toProductImage } from "@/lib/types/product/types"
+import {
+  toProduct,
+  toProductCategory,
+  toPersonalizationModule,
+  toProductImage,
+  toGlamProduct,
+} from "@/lib/types/product/types"
+import type { GlamProduct } from "@/lib/types/product/types"
 import { ServerAuthenticatedLayout } from "@/components/server-authenticated-layout"
 import { ProductForm } from "@/components/product/product-form"
 import { ArrowLeft } from "lucide-react"
@@ -13,16 +20,12 @@ interface EditProductPageProps {
   params: Promise<{ id: string; productId: string }>
 }
 
-/**
- * Obtiene el proyecto, producto y catálogos necesarios
- */
 async function getProductData(idOrPublicCode: string, productId: string, userId: string) {
   try {
     const projectClient = getProjectClient()
     const productClient = getProductClient()
     const storageClient = getProductStorageClient()
     
-    // Intentar primero por public_code, luego por ID
     let backendProject = await projectClient.getProjectByPublicCode(idOrPublicCode)
     
     if (!backendProject) {
@@ -33,22 +36,18 @@ async function getProductData(idOrPublicCode: string, productId: string, userId:
       return null
     }
     
-    // Verificar propiedad
     if (backendProject.organizer_id !== userId) {
       return null
     }
     
     const project = toProject(backendProject)
     
-    // Obtener producto
     const backendProduct = await productClient.getProductById(productId)
     
-    // Verificar que el producto pertenece al proyecto (usar ID interno)
     if (!backendProduct || backendProduct.project_id !== backendProject.id) {
       return null
     }
     
-    // Obtener categorías y módulos
     const [backendCategories, backendModules, backendImages] = await Promise.all([
       productClient.getCategories(),
       productClient.getPersonalizationModules(),
@@ -58,18 +57,45 @@ async function getProductData(idOrPublicCode: string, productId: string, userId:
     const categories = backendCategories.map(toProductCategory)
     const modules = backendModules.map(toPersonalizationModule)
     
-    // Transformar imágenes
     const images = backendImages.map(img => {
       const publicUrl = storageClient.getPublicUrlFromPath(img.url)
       return toProductImage(img, publicUrl)
     })
     
-    // Obtener categoría del producto
-    const productCategory = categories.find(c => c.id === backendProduct.category_id)
+    let productCategory = categories.find(c => c.id === backendProduct.category_id)
+    if (!productCategory && backendProduct.glam_product_id) {
+      const glamProduct = await productClient.getGlamProductById(backendProduct.glam_product_id)
+      if (glamProduct) {
+        productCategory = categories.find(c => c.id === glamProduct.category_id)
+      }
+    }
     
     const product = toProduct(backendProduct, images, productCategory)
+
+    // Load the glam_product data for the current product (RN-49)
+    let glamProductData: GlamProduct | undefined
+    if (backendProduct.glam_product_id) {
+      const backendGlam = await productClient.getGlamProductById(backendProduct.glam_product_id)
+      if (backendGlam) {
+        glamProductData = toGlamProduct(backendGlam)
+      }
+    }
+
+    // Load all glam_products for the product's category (for selector in draft)
+    let glamProductsForCategory: GlamProduct[] = []
+    if (productCategory) {
+      const backendGlamProducts = await productClient.getGlamProductsByCategory(productCategory.id)
+      glamProductsForCategory = backendGlamProducts.map(toGlamProduct)
+    }
     
-    return { project, product, categories, modules }
+    return {
+      project,
+      product,
+      categories,
+      modules,
+      glamProductData,
+      glamProductsForCategory,
+    }
   } catch (error) {
     console.error("Error loading product data:", error)
     return null
@@ -96,27 +122,15 @@ export async function generateMetadata({ params }: EditProductPageProps) {
   }
 }
 
-/**
- * Página de edición de producto existente
- * 
- * Server Component que:
- * - Valida sesión del usuario
- * - Verifica rol organizador
- * - Carga el proyecto, producto y catálogos
- * - Verifica propiedad del proyecto
- * - Renderiza el formulario de edición
- */
 export default async function EditProductPage({ params }: EditProductPageProps) {
   const { id, productId } = await params
   
-  // Validar sesión
   const session = await getSession()
   
   if (!session) {
     redirect("/")
   }
   
-  // Verificar sesión completa
   if (!isCompleteSession(session)) {
     if (session.needsOnboarding) {
       redirect("/onboarding")
@@ -127,30 +141,37 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
     redirect("/")
   }
   
-  // Verificar rol organizador
   if (session.role !== "organizer") {
     redirect("/")
   }
   
   const userId = session.userId || session.sub
   
-  // Cargar datos
   const data = await getProductData(id, productId, userId)
   
   if (!data) {
     notFound()
   }
   
-  const { project, product, categories, modules } = data
-  
-  // Determinar si la configuración es editable (solo en draft)
-  const isConfigEditable = product.status === "draft"
+  const { project, product, categories, modules, glamProductData, glamProductsForCategory } = data
+
+  const isDraft = product.status === "draft"
+  const isActive = product.status === "active"
+  const isInactive = product.status === "inactive"
+
+  const isConfigEditable = isDraft
+  const isDataEditable = isDraft || isActive
+
+  const statusMessage = isInactive
+    ? "Este producto está inactivo. Todos los campos son de solo lectura. Solo puedes reactivar el producto."
+    : isActive
+    ? "La configuración de categoría, producto del catálogo, atributos y personalización no puede modificarse porque el producto está activo. Solo puedes editar el nombre, descripción y estado."
+    : null
   
   return (
     <ServerAuthenticatedLayout session={session}>
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
         <div className="container mx-auto px-4 py-8 max-w-3xl">
-          {/* Header */}
           <div className="mb-8">
             <Link 
               href={`/project/${id}/products`} 
@@ -167,23 +188,25 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
               Modifica la configuración de <span className="font-medium">{product.name}</span>
             </p>
             
-            {!isConfigEditable && (
+            {statusMessage && (
               <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <p className="text-sm text-amber-800 dark:text-amber-200">
-                  <strong>Nota:</strong> La configuración de personalización no puede modificarse porque el producto ya fue activado. 
-                  Solo puedes editar el nombre, descripción, precio e imágenes.
+                  <strong>Nota:</strong> {statusMessage}
                 </p>
               </div>
             )}
           </div>
 
-          {/* Formulario */}
           <ProductForm 
             projectId={project.id}
             product={product}
             categories={categories}
             modules={modules}
             isConfigEditable={isConfigEditable}
+            isDataEditable={isDataEditable}
+            project={{ commission: project.commission }}
+            glamProducts={glamProductsForCategory}
+            selectedGlamProduct={glamProductData}
           />
         </div>
       </div>

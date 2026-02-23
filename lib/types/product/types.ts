@@ -1,7 +1,7 @@
 /**
  * Tipos del dominio de Productos
  * 
- * Basado en spec.md v1.0 - Creación de Productos
+ * Basado en spec.md v2.1 - Creación de Productos
  * Alineado con backend Supabase (tablas project_products, product_categories, 
  * personalization_modules, product_images)
  */
@@ -115,17 +115,40 @@ export interface BackendPersonalizationModule {
 }
 
 /**
- * Producto del backend (project_products)
+ * Producto del backend (project_products) - Spec: price, glam_product_id; category heredada de glam_product
  */
 export interface BackendProduct {
   id: string
   project_id: string
-  category_id: string
+  glam_product_id: string
   name: string
   description?: string
   status: ProductStatus
-  base_price: number
+  price: number
+  /** Compatibilidad: backend antiguo puede enviar base_price */
+  base_price?: number
   personalization_config: PersonalizationConfig
+  selected_attributes?: SelectedAttributes
+  created_at: string
+  updated_at: string
+  category_id?: string
+}
+
+/**
+ * Producto del catálogo Glam Urban (glam_products)
+ * Solo lectura - el organizador puede elegir uno al crear project_product
+ */
+export interface BackendGlamProduct {
+  id: string
+  code: string
+  name: string
+  description?: string
+  category_id: string
+  base_price: number
+  /** URL de imagen del producto en el catálogo (opcional) */
+  image_url?: string
+  attributes_config?: Record<string, unknown>
+  is_active: boolean
   created_at: string
   updated_at: string
 }
@@ -177,11 +200,14 @@ export interface Product {
   projectId: string
   categoryId: string
   category?: ProductCategory
+  glamProductId?: string
+  glamProductImageUrl?: string
   name: string
   description?: string
   status: ProductStatus
   basePrice: number
   personalizationConfig: PersonalizationConfig
+  selectedAttributes: SelectedAttributes
   images: ProductImage[]
   createdAt: string
   updatedAt: string
@@ -204,28 +230,37 @@ export interface ProductImage {
 // ============================================
 
 /**
- * DTO para crear producto (POST)
+ * Atributos seleccionados por el organizador (selected_attributes en project_products)
+ * Inmutable después de la creación. Ej: { "quality": { "selected_option": "premium", "price_modifier": 3000 } }
+ */
+export type SelectedAttributes = Record<string, { selected_option: string; price_modifier: number }>
+
+/**
+ * DTO para crear producto (POST) - Spec product-curl-example.md
+ * glam_product_id obligatorio; categoría se hereda del glam_product; campo price (no base_price)
  */
 export interface CreateProductDTO {
   project_id: string
-  category_id: string
+  glam_product_id: string
   name: string
-  description?: string
-  base_price: number
+  description: string
+  price: number
   personalization_config: PersonalizationConfig
-  status?: ProductStatus // Default: draft
+  selected_attributes: SelectedAttributes
 }
 
 /**
  * DTO para actualizar producto (PATCH)
- * personalization_config solo editable si status es draft (RN-12, RN-13)
+ * Campos disponibles dependen del estado: draft (todos), active (name/description/status), inactive (solo status)
  */
 export interface UpdateProductDTO {
   name?: string
   description?: string
-  base_price?: number
-  personalization_config?: PersonalizationConfig // Solo si draft
+  price?: number
   status?: ProductStatus
+  personalization_config?: PersonalizationConfig
+  selected_attributes?: SelectedAttributes
+  glam_product_id?: string
 }
 
 /**
@@ -248,24 +283,29 @@ export interface UpdateProductImageDTO {
 
 /**
  * Input del formulario para crear producto
+ * glam_product_id obligatorio; price viene del producto del catálogo seleccionado
  */
 export interface CreateProductInput {
-  categoryId: string
+  glamProductId: string
   name: string
-  description?: string
-  basePrice: number
+  description: string
+  price: number
   personalizationConfig: PersonalizationConfig
+  selectedAttributes?: SelectedAttributes
 }
 
 /**
  * Input del formulario para actualizar producto
+ * Campos disponibles dependen del estado (RN-46, RN-47)
  */
 export interface UpdateProductInput {
   name?: string
   description?: string
   basePrice?: number
-  personalizationConfig?: PersonalizationConfig
   status?: ProductStatus
+  personalizationConfig?: PersonalizationConfig
+  selectedAttributes?: SelectedAttributes
+  glamProductId?: string
 }
 
 // ============================================
@@ -325,6 +365,38 @@ export interface CategoryListResponse {
 }
 
 /**
+ * Configuración de un atributo dentro de attributes_config de glam_products
+ */
+export interface GlamAttributeConfig {
+  options: string[]
+  price_modifier: Record<string, number>
+}
+
+/**
+ * Producto del catálogo Glam Urban para el frontend
+ */
+export interface GlamProduct {
+  id: string
+  code: string
+  name: string
+  description?: string
+  categoryId: string
+  basePrice: number
+  imageUrl?: string
+  /** Atributos disponibles con sus opciones y modificadores de precio */
+  attributesConfig: Record<string, GlamAttributeConfig>
+}
+
+/**
+ * Respuesta del API al listar productos del catálogo (glam_products)
+ */
+export interface GlamProductListResponse {
+  success: boolean
+  data?: GlamProduct[]
+  error?: string
+}
+
+/**
  * Respuesta del API para imágenes
  */
 export interface ImageUploadResponse {
@@ -378,7 +450,7 @@ export const MAX_PRODUCT_DESCRIPTION_LENGTH = 1000
 export const PRODUCT_STATUS_CONFIG = {
   draft: {
     label: "Borrador",
-    color: "gray",
+    color: "yellow",
     description: "Producto en configuración, no visible para compradores",
   },
   active: {
@@ -388,7 +460,7 @@ export const PRODUCT_STATUS_CONFIG = {
   },
   inactive: {
     label: "Inactivo",
-    color: "red",
+    color: "gray",
     description: "Producto desactivado, no visible para nuevos compradores",
   },
 } as const
@@ -494,6 +566,33 @@ export function validateProductName(name: string): { valid: boolean; error?: str
     return { valid: false, error: `El nombre no puede exceder ${MAX_PRODUCT_NAME_LENGTH} caracteres` }
   }
   
+  return { valid: true }
+}
+
+/**
+ * Valida la descripción del producto (RN-19: obligatoria)
+ */
+export function validateProductDescription(description: string): { valid: boolean; error?: string } {
+  const trimmed = description.trim()
+  
+  if (!trimmed) {
+    return { valid: false, error: "La descripción del producto es obligatoria" }
+  }
+  
+  if (trimmed.length > MAX_PRODUCT_DESCRIPTION_LENGTH) {
+    return { valid: false, error: `La descripción no puede exceder ${MAX_PRODUCT_DESCRIPTION_LENGTH} caracteres` }
+  }
+  
+  return { valid: true }
+}
+
+/**
+ * Valida que se haya seleccionado una categoría (RN-43)
+ */
+export function validateCategory(categoryId: string | null | undefined): { valid: boolean; error?: string } {
+  if (!categoryId) {
+    return { valid: false, error: "Selecciona una categoría de producto" }
+  }
   return { valid: true }
 }
 
@@ -629,6 +728,33 @@ export function toPersonalizationModule(backend: BackendPersonalizationModule): 
 }
 
 /**
+ * Transforma producto del catálogo (glam_products) al frontend
+ */
+export function toGlamProduct(backend: BackendGlamProduct): GlamProduct {
+  const raw = (backend.attributes_config ?? {}) as Record<string, unknown>
+  const attributesConfig: Record<string, GlamAttributeConfig> = {}
+  for (const [key, val] of Object.entries(raw)) {
+    const v = val as { options?: string[]; price_modifier?: Record<string, number> }
+    if (v && Array.isArray(v.options)) {
+      attributesConfig[key] = {
+        options: v.options,
+        price_modifier: v.price_modifier ?? {},
+      }
+    }
+  }
+  return {
+    id: backend.id,
+    code: backend.code,
+    name: backend.name,
+    description: backend.description,
+    categoryId: backend.category_id,
+    basePrice: backend.base_price,
+    imageUrl: backend.image_url,
+    attributesConfig,
+  }
+}
+
+/**
  * Transforma imagen del backend al frontend
  */
 export function toProductImage(backend: BackendProductImage, publicUrl: string): ProductImage {
@@ -648,18 +774,23 @@ export function toProductImage(backend: BackendProductImage, publicUrl: string):
 export function toProduct(
   backend: BackendProduct,
   images: ProductImage[] = [],
-  category?: ProductCategory
+  category?: ProductCategory,
+  glamProductImageUrl?: string
 ): Product {
+  const price = backend.price ?? backend.base_price ?? 0
   return {
     id: backend.id,
     projectId: backend.project_id,
-    categoryId: backend.category_id,
+    categoryId: category?.id || backend.category_id || "",
     category,
+    glamProductId: backend.glam_product_id,
+    glamProductImageUrl,
     name: backend.name,
     description: backend.description,
     status: backend.status,
-    basePrice: backend.base_price,
+    basePrice: price,
     personalizationConfig: backend.personalization_config,
+    selectedAttributes: backend.selected_attributes ?? {},
     images,
     createdAt: backend.created_at,
     updatedAt: backend.updated_at,
@@ -667,7 +798,7 @@ export function toProduct(
 }
 
 /**
- * Transforma input del formulario a DTO para crear
+ * Transforma input del formulario a DTO para crear (spec: glam_product_id, price, selected_attributes)
  */
 export function toCreateProductDTO(
   input: CreateProductInput,
@@ -675,12 +806,12 @@ export function toCreateProductDTO(
 ): CreateProductDTO {
   return {
     project_id: projectId,
-    category_id: input.categoryId,
+    glam_product_id: input.glamProductId,
     name: input.name.trim(),
-    description: input.description?.trim(),
-    base_price: input.basePrice,
+    description: input.description.trim(),
+    price: input.price,
     personalization_config: input.personalizationConfig,
-    status: "draft",
+    selected_attributes: input.selectedAttributes ?? {},
   }
 }
 
@@ -689,7 +820,6 @@ export function toCreateProductDTO(
  */
 export function toUpdateProductDTO(input: UpdateProductInput): UpdateProductDTO {
   const dto: UpdateProductDTO = {}
-  
   if (input.name !== undefined) {
     dto.name = input.name.trim()
   }
@@ -697,15 +827,20 @@ export function toUpdateProductDTO(input: UpdateProductInput): UpdateProductDTO 
     dto.description = input.description?.trim()
   }
   if (input.basePrice !== undefined) {
-    dto.base_price = input.basePrice
-  }
-  if (input.personalizationConfig !== undefined) {
-    dto.personalization_config = input.personalizationConfig
+    dto.price = input.basePrice
   }
   if (input.status !== undefined) {
     dto.status = input.status
   }
-  
+  if (input.personalizationConfig !== undefined) {
+    dto.personalization_config = input.personalizationConfig
+  }
+  if (input.selectedAttributes !== undefined) {
+    dto.selected_attributes = input.selectedAttributes
+  }
+  if (input.glamProductId !== undefined) {
+    dto.glam_product_id = input.glamProductId
+  }
   return dto
 }
 
@@ -749,6 +884,40 @@ export function createDefaultModuleConfig(
         price_modifier: 0,
       }
   }
+}
+
+/**
+ * Construye personalization_config con todos los módulos permitidos por la categoría,
+ * cada uno con enabled: false por defecto (RN-44, RN-45).
+ * Garantiza que el formulario siempre envíe todos los módulos de la categoría.
+ */
+export function buildDefaultPersonalizationConfig(
+  allowedModules: PersonalizationModuleCode[]
+): PersonalizationConfig {
+  const config: PersonalizationConfig = {}
+  for (const moduleCode of allowedModules) {
+    const defaultConfig = createDefaultModuleConfig(moduleCode)
+    config[moduleCode] = { ...defaultConfig, enabled: false } as typeof defaultConfig
+  }
+  return config
+}
+
+/**
+ * Completa un personalization_config existente para que incluya TODOS los módulos
+ * permitidos por la categoría (RN-45). Los módulos no presentes se agregan con enabled: false.
+ */
+export function ensureAllModulesPresent(
+  config: PersonalizationConfig,
+  allowedModules: PersonalizationModuleCode[]
+): PersonalizationConfig {
+  const result = { ...config }
+  for (const moduleCode of allowedModules) {
+    if (!result[moduleCode]) {
+      const defaultConfig = createDefaultModuleConfig(moduleCode)
+      result[moduleCode] = { ...defaultConfig, enabled: false } as typeof defaultConfig
+    }
+  }
+  return result
 }
 
 /**

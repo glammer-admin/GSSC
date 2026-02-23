@@ -6,6 +6,7 @@
 import type {
   BackendProduct,
   BackendProductCategory,
+  BackendGlamProduct,
   BackendPersonalizationModule,
   BackendProductImage,
   CreateProductDTO,
@@ -35,6 +36,7 @@ export type BackendUpdateResponse<T> = T[]
 export type {
   BackendProduct,
   BackendProductCategory,
+  BackendGlamProduct,
   BackendPersonalizationModule,
   BackendProductImage,
   CreateProductDTO,

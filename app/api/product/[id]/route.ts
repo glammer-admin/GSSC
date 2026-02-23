@@ -3,40 +3,40 @@ import { getSession, isCompleteSession } from "@/lib/auth/session-manager"
 import { getProductClient, getProductStorageClient, HttpError, NetworkError } from "@/lib/http/product"
 import { getProjectClient } from "@/lib/http/project"
 import {
-  validateProductName,
-  validateBasePrice,
-  validateModulesForCategory,
-  isValidProductStatusTransition,
-  canActivateProduct,
-  toUpdateProductDTO,
   toProduct,
   toProductCategory,
   toProductImage,
+  toUpdateProductDTO,
+  isValidProductStatusTransition,
+  validateProductName,
+  validateProductDescription,
+  validateModulesForCategory,
+  ensureAllModulesPresent,
   MIN_IMAGES_FOR_ACTIVATION,
 } from "@/lib/types/product/types"
-import type { UpdateProductInput, ProductResponse, SaveProductResponse } from "@/lib/types/product/types"
+import type {
+  UpdateProductInput,
+  SaveProductResponse,
+  ProductResponse,
+  ProductStatus,
+} from "@/lib/types/product/types"
 
-// Configuración del runtime para Next.js App Router
 export const maxDuration = 60
 
-interface RouteParams {
+interface RouteContext {
   params: Promise<{ id: string }>
 }
 
 /**
  * GET /api/product/[id]
- * Obtiene un producto por ID
+ * Obtiene un producto por ID con sus imágenes y categoría
  */
 export async function GET(
   request: NextRequest,
-  { params }: RouteParams
+  context: RouteContext
 ): Promise<NextResponse<ProductResponse>> {
   try {
-    const { id } = await params
-
-    // Validar sesión
     const session = await getSession()
-    
     if (!session || !isCompleteSession(session)) {
       return NextResponse.json(
         { success: false, error: "No autorizado" },
@@ -44,13 +44,12 @@ export async function GET(
       )
     }
 
+    const { id: productId } = await context.params
     const userId = session.userId || session.sub
     const productClient = getProductClient()
-    const projectClient = getProjectClient()
+    const storageClient = getProductStorageClient()
 
-    // Obtener producto
-    const backendProduct = await productClient.getProductById(id)
-
+    const backendProduct = await productClient.getProductById(productId)
     if (!backendProduct) {
       return NextResponse.json(
         { success: false, error: "Producto no encontrado" },
@@ -58,63 +57,51 @@ export async function GET(
       )
     }
 
-    // Verificar que el usuario tiene acceso al proyecto del producto
+    const projectClient = getProjectClient()
     const project = await projectClient.getProjectById(backendProduct.project_id)
-    
-    if (!project) {
-      return NextResponse.json(
-        { success: false, error: "Proyecto no encontrado" },
-        { status: 404 }
-      )
-    }
-
-    if (project.organizer_id !== userId) {
+    if (!project || project.organizer_id !== userId) {
       return NextResponse.json(
         { success: false, error: "No tienes permiso para ver este producto" },
         { status: 403 }
       )
     }
 
-    // Obtener categoría
-    const category = await productClient.getCategoryById(backendProduct.category_id)
-    
-    // Obtener imágenes
-    const backendImages = await productClient.getProductImages(id)
-    const storageClient = getProductStorageClient()
-    
+    const [backendCategories, backendImages] = await Promise.all([
+      productClient.getCategories(),
+      productClient.getProductImages(productId),
+    ])
+
+    const categoriesMap = new Map(backendCategories.map(c => [c.id, toProductCategory(c)]))
     const images = backendImages.map(img => {
       const publicUrl = storageClient.getPublicUrlFromPath(img.url)
       return toProductImage(img, publicUrl)
     })
 
-    // Transformar a formato frontend
-    const product = toProduct(
-      backendProduct,
-      images,
-      category ? toProductCategory(category) : undefined
-    )
+    let productCategory = categoriesMap.get(backendProduct.category_id ?? "")
+    if (!productCategory && backendProduct.glam_product_id) {
+      const glamProduct = await productClient.getGlamProductById(backendProduct.glam_product_id)
+      if (glamProduct) {
+        productCategory = categoriesMap.get(glamProduct.category_id)
+      }
+    }
 
-    return NextResponse.json({
-      success: true,
-      data: product,
-    })
+    const product = toProduct(backendProduct, images, productCategory)
+
+    return NextResponse.json({ success: true, data: product })
   } catch (error) {
     console.error("Error getting product:", error)
-
     if (error instanceof HttpError) {
       return NextResponse.json(
         { success: false, error: `Error del servidor: ${error.status}` },
         { status: error.status }
       )
     }
-
     if (error instanceof NetworkError) {
       return NextResponse.json(
         { success: false, error: "Error de conexión con el servidor" },
         { status: 503 }
       )
     }
-
     return NextResponse.json(
       { success: false, error: "Error interno del servidor" },
       { status: 500 }
@@ -124,25 +111,17 @@ export async function GET(
 
 /**
  * PATCH /api/product/[id]
- * Actualiza un producto existente
- * 
- * Body (JSON):
- * - name: Nuevo nombre (opcional)
- * - description: Nueva descripción (opcional)
- * - basePrice: Nuevo precio (opcional)
- * - personalizationConfig: Nueva configuración (opcional, solo si draft)
- * - status: Nuevo estado (opcional)
+ * Actualiza un producto con restricciones por estado:
+ * - draft: todos los campos editables
+ * - active: solo name, description, status (a inactive)
+ * - inactive: solo status (a active, requiere min 3 imágenes)
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: RouteParams
+  context: RouteContext
 ): Promise<NextResponse<SaveProductResponse>> {
   try {
-    const { id } = await params
-
-    // Validar sesión
     const session = await getSession()
-    
     if (!session || !isCompleteSession(session)) {
       return NextResponse.json(
         { success: false, error: "No autorizado" },
@@ -150,7 +129,6 @@ export async function PATCH(
       )
     }
 
-    // Verificar rol organizer
     if (session.role !== "organizer") {
       return NextResponse.json(
         { success: false, error: "No tienes permiso para editar productos" },
@@ -158,41 +136,12 @@ export async function PATCH(
       )
     }
 
+    const { id: productId } = await context.params
     const userId = session.userId || session.sub
-    const productClient = getProductClient()
-    const projectClient = getProjectClient()
 
-    // Obtener producto actual
-    const currentProduct = await productClient.getProductById(id)
-
-    if (!currentProduct) {
-      return NextResponse.json(
-        { success: false, error: "Producto no encontrado" },
-        { status: 404 }
-      )
-    }
-
-    // Verificar que el usuario es dueño del proyecto
-    const project = await projectClient.getProjectById(currentProduct.project_id)
-    
-    if (!project) {
-      return NextResponse.json(
-        { success: false, error: "Proyecto no encontrado" },
-        { status: 404 }
-      )
-    }
-
-    if (project.organizer_id !== userId) {
-      return NextResponse.json(
-        { success: false, error: "No tienes permiso para editar este producto" },
-        { status: 403 }
-      )
-    }
-
-    // Parsear body
-    let input: UpdateProductInput
+    let body: UpdateProductInput & { status?: ProductStatus }
     try {
-      input = await request.json()
+      body = await request.json()
     } catch {
       return NextResponse.json(
         { success: false, error: "El body debe ser JSON válido" },
@@ -200,103 +149,248 @@ export async function PATCH(
       )
     }
 
-    // Validar nombre si se está actualizando
-    if (input.name !== undefined) {
-      const nameValidation = validateProductName(input.name)
-      if (!nameValidation.valid) {
-        return NextResponse.json(
-          { success: false, error: nameValidation.error },
-          { status: 400 }
-        )
-      }
-    }
+    const productClient = getProductClient()
 
-    // Validar precio si se está actualizando
-    if (input.basePrice !== undefined) {
-      const priceValidation = validateBasePrice(input.basePrice)
-      if (!priceValidation.valid) {
-        return NextResponse.json(
-          { success: false, error: priceValidation.error },
-          { status: 400 }
-        )
-      }
-    }
-
-    // Validar que personalization_config solo se modifique si el producto está en draft
-    if (input.personalizationConfig !== undefined && currentProduct.status !== "draft") {
+    const currentProduct = await productClient.getProductById(productId)
+    if (!currentProduct) {
       return NextResponse.json(
-        { success: false, error: "La configuración de personalización no puede modificarse en productos que no están en borrador" },
+        { success: false, error: "Producto no encontrado" },
+        { status: 404 }
+      )
+    }
+
+    const projectClient = getProjectClient()
+    const project = await projectClient.getProjectById(currentProduct.project_id)
+    if (!project || project.organizer_id !== userId) {
+      return NextResponse.json(
+        { success: false, error: "No tienes permiso para editar este producto" },
+        { status: 403 }
+      )
+    }
+
+    const currentStatus = currentProduct.status
+    const input: UpdateProductInput = body
+
+    // ─── State-based restrictions (RN-46, RN-47) ───
+
+    if (currentStatus === "inactive") {
+      const hasDataChanges =
+        input.name !== undefined ||
+        input.description !== undefined ||
+        input.basePrice !== undefined ||
+        input.personalizationConfig !== undefined ||
+        input.selectedAttributes !== undefined ||
+        input.glamProductId !== undefined
+      if (hasDataChanges) {
+        return NextResponse.json(
+          { success: false, error: "PRODUCT_INACTIVE_READONLY" },
+          { status: 400 }
+        )
+      }
+      if (input.status !== undefined && input.status !== "active") {
+        return NextResponse.json(
+          { success: false, error: "INVALID_STATUS_TRANSITION" },
+          { status: 400 }
+        )
+      }
+    }
+
+    if (currentStatus === "active") {
+      if (input.personalizationConfig !== undefined) {
+        return NextResponse.json(
+          { success: false, error: "CONFIG_IMMUTABLE" },
+          { status: 400 }
+        )
+      }
+      if (input.selectedAttributes !== undefined) {
+        return NextResponse.json(
+          { success: false, error: "ATTRIBUTES_IMMUTABLE" },
+          { status: 400 }
+        )
+      }
+      if (input.glamProductId !== undefined) {
+        return NextResponse.json(
+          { success: false, error: "CONFIG_IMMUTABLE" },
+          { status: 400 }
+        )
+      }
+      if (input.basePrice !== undefined) {
+        return NextResponse.json(
+          { success: false, error: "CONFIG_IMMUTABLE" },
+          { status: 400 }
+        )
+      }
+      if (input.status !== undefined && input.status !== "inactive") {
+        return NextResponse.json(
+          { success: false, error: "INVALID_STATUS_TRANSITION" },
+          { status: 400 }
+        )
+      }
+    }
+
+    // ─── Status transition validation ───
+
+    if (input.status !== undefined && input.status !== currentStatus) {
+      if (!isValidProductStatusTransition(currentStatus, input.status)) {
+        return NextResponse.json(
+          { success: false, error: "INVALID_STATUS_TRANSITION" },
+          { status: 400 }
+        )
+      }
+
+      if (input.status === "active") {
+        const imageCount = await productClient.getProductImageCount(productId)
+        if (imageCount < MIN_IMAGES_FOR_ACTIVATION) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `El producto requiere mínimo ${MIN_IMAGES_FOR_ACTIVATION} imágenes para ser activado`,
+            },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
+    // ─── Draft-specific validations ───
+
+    if (currentStatus === "draft") {
+      if (input.name !== undefined) {
+        const nameVal = validateProductName(input.name)
+        if (!nameVal.valid) {
+          return NextResponse.json(
+            { success: false, error: nameVal.error },
+            { status: 400 }
+          )
+        }
+      }
+
+      if (input.description !== undefined) {
+        const descVal = validateProductDescription(input.description)
+        if (!descVal.valid) {
+          return NextResponse.json(
+            { success: false, error: descVal.error },
+            { status: 400 }
+          )
+        }
+      }
+
+      if (input.glamProductId !== undefined) {
+        const glamProduct = await productClient.getGlamProductById(input.glamProductId)
+        if (!glamProduct) {
+          return NextResponse.json(
+            { success: false, error: "GLAM_PRODUCT_NOT_FOUND" },
+            { status: 400 }
+          )
+        }
+
+        const category = await productClient.getCategoryById(glamProduct.category_id)
+        if (!category) {
+          return NextResponse.json(
+            { success: false, error: "CATEGORY_NOT_FOUND" },
+            { status: 400 }
+          )
+        }
+
+        if (input.personalizationConfig) {
+          const modulesVal = validateModulesForCategory(
+            input.personalizationConfig,
+            category.allowed_modules
+          )
+          if (!modulesVal.valid) {
+            return NextResponse.json(
+              { success: false, error: modulesVal.error },
+              { status: 400 }
+            )
+          }
+          input.personalizationConfig = ensureAllModulesPresent(
+            input.personalizationConfig,
+            category.allowed_modules
+          )
+        }
+      } else if (input.personalizationConfig) {
+        const glamProduct = await productClient.getGlamProductById(
+          currentProduct.glam_product_id
+        )
+        if (glamProduct) {
+          const category = await productClient.getCategoryById(glamProduct.category_id)
+          if (category) {
+            const modulesVal = validateModulesForCategory(
+              input.personalizationConfig,
+              category.allowed_modules
+            )
+            if (!modulesVal.valid) {
+              return NextResponse.json(
+                { success: false, error: modulesVal.error },
+                { status: 400 }
+              )
+            }
+            input.personalizationConfig = ensureAllModulesPresent(
+              input.personalizationConfig,
+              category.allowed_modules
+            )
+          }
+        }
+      }
+    }
+
+    // ─── Active-specific validations ───
+
+    if (currentStatus === "active") {
+      if (input.name !== undefined) {
+        const nameVal = validateProductName(input.name)
+        if (!nameVal.valid) {
+          return NextResponse.json(
+            { success: false, error: nameVal.error },
+            { status: 400 }
+          )
+        }
+      }
+      if (input.description !== undefined) {
+        const descVal = validateProductDescription(input.description)
+        if (!descVal.valid) {
+          return NextResponse.json(
+            { success: false, error: descVal.error },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
+    // ─── Build DTO and update ───
+
+    const updateDTO = toUpdateProductDTO(input)
+
+    if (Object.keys(updateDTO).length === 0) {
+      return NextResponse.json(
+        { success: false, error: "No se proporcionaron campos para actualizar" },
         { status: 400 }
       )
     }
 
-    // Validar módulos de personalización si se están actualizando
-    if (input.personalizationConfig !== undefined) {
-      const category = await productClient.getCategoryById(currentProduct.category_id)
-      if (category) {
-        const modulesValidation = validateModulesForCategory(
-          input.personalizationConfig,
-          category.allowed_modules
-        )
-        if (!modulesValidation.valid) {
-          return NextResponse.json(
-            { success: false, error: modulesValidation.error },
-            { status: 400 }
-          )
-        }
-      }
-    }
+    const updatedBackend = await productClient.updateProduct(productId, updateDTO)
 
-    // Validar transición de estado si se está cambiando
-    if (input.status && input.status !== currentProduct.status) {
-      if (!isValidProductStatusTransition(currentProduct.status, input.status)) {
-        return NextResponse.json(
-          { success: false, error: "La transición de estado no es válida" },
-          { status: 400 }
-        )
-      }
-
-      // Si intenta activar, validar requisitos
-      if (input.status === "active") {
-        const imageCount = await productClient.getProductImageCount(id)
-        
-        const productToValidate = {
-          name: input.name || currentProduct.name,
-          basePrice: input.basePrice ?? currentProduct.base_price,
-        }
-        
-        const activationValidation = canActivateProduct(productToValidate, imageCount)
-        if (!activationValidation.valid) {
-          return NextResponse.json(
-            { success: false, error: activationValidation.errors[0] },
-            { status: 400 }
-          )
-        }
-      }
-    }
-
-    // Actualizar producto en backend
-    const updateDTO = toUpdateProductDTO(input)
-    const backendProduct = await productClient.updateProduct(id, updateDTO)
-
-    // Obtener categoría e imágenes para la respuesta
-    const category = await productClient.getCategoryById(backendProduct.category_id)
-    const backendImages = await productClient.getProductImages(id)
     const storageClient = getProductStorageClient()
-    
+    const [backendCategories, backendImages] = await Promise.all([
+      productClient.getCategories(),
+      productClient.getProductImages(productId),
+    ])
+
+    const categoriesMap = new Map(backendCategories.map(c => [c.id, toProductCategory(c)]))
     const images = backendImages.map(img => {
       const publicUrl = storageClient.getPublicUrlFromPath(img.url)
       return toProductImage(img, publicUrl)
     })
 
-    // Transformar a formato frontend
-    const product = toProduct(
-      backendProduct,
-      images,
-      category ? toProductCategory(category) : undefined
-    )
+    let productCategory = categoriesMap.get(updatedBackend.category_id ?? "")
+    if (!productCategory && updatedBackend.glam_product_id) {
+      const gp = await productClient.getGlamProductById(updatedBackend.glam_product_id)
+      if (gp) productCategory = categoriesMap.get(gp.category_id)
+    }
 
-    console.log(`✅ [API PRODUCT] Product updated: ${product.id}`)
+    const product = toProduct(updatedBackend, images, productCategory)
+
+    console.log(`✅ [API PRODUCT] Product updated: ${product.id} (status: ${product.status})`)
 
     return NextResponse.json({
       success: true,
@@ -307,6 +401,22 @@ export async function PATCH(
     console.error("Error updating product:", error)
 
     if (error instanceof HttpError) {
+      const errorBody = typeof error.body === "string" ? error.body : JSON.stringify(error.body)
+
+      if (errorBody.includes("personalization") || errorBody.includes("selected_attributes")) {
+        return NextResponse.json(
+          { success: false, error: "CONFIG_IMMUTABLE" },
+          { status: 400 }
+        )
+      }
+
+      if (errorBody.includes("check") || errorBody.includes("constraint")) {
+        return NextResponse.json(
+          { success: false, error: "Error de validación en los datos del producto" },
+          { status: 400 }
+        )
+      }
+
       return NextResponse.json(
         { success: false, error: `Error del servidor: ${error.status}` },
         { status: error.status }

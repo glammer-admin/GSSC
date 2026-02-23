@@ -148,6 +148,7 @@ export default async function NewProductPage({ params }: NewProductPageProps) {
             projectId={project.id}
             categories={categories}
             modules={modules}
+            project={{ commission: project.commission }}
           />
         </div>
       </div>

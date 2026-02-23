@@ -7,6 +7,7 @@ import { HttpClient, HttpError, NetworkError } from "../client"
 import type {
   BackendProduct,
   BackendProductCategory,
+  BackendGlamProduct,
   BackendPersonalizationModule,
   BackendProductImage,
   CreateProductDTO,
@@ -165,6 +166,59 @@ class ProductClient {
       return response[0]
     } catch (error) {
       this.handleError("getCategoryById", error)
+      throw error
+    }
+  }
+
+  // ============================================================
+  // PRODUCTOS DEL CATÁLOGO GLAM URBAN (glam_products, solo lectura)
+  // ============================================================
+
+  /**
+   * Obtiene los productos del catálogo Glam Urban por categoría
+   * @param categoryId - ID de la categoría
+   * @returns Lista de productos del catálogo activos
+   */
+  async getGlamProductsByCategory(categoryId: string): Promise<BackendGlamProduct[]> {
+    try {
+      console.log(`🔍 [PRODUCT CLIENT] Getting glam products for category: ${categoryId}`)
+      
+      const response = await this.client.get<BackendArrayResponse<BackendGlamProduct>>(
+        "/glam_products",
+        {
+          params: {
+            category_id: `eq.${categoryId}`,
+            is_active: "eq.true",
+            order: "name.asc",
+          },
+          headers: this.getReadHeaders(),
+        }
+      )
+
+      console.log(`✅ [PRODUCT CLIENT] Found ${response?.length || 0} glam products`)
+      return response || []
+    } catch (error) {
+      this.handleError("getGlamProductsByCategory", error)
+      throw error
+    }
+  }
+
+  /**
+   * Obtiene un producto del catálogo Glam Urban por ID
+   */
+  async getGlamProductById(id: string): Promise<BackendGlamProduct | null> {
+    try {
+      const response = await this.client.get<BackendArrayResponse<BackendGlamProduct>>(
+        "/glam_products",
+        {
+          params: { id: `eq.${id}` },
+          headers: this.getReadHeaders(),
+        }
+      )
+      if (!response || response.length === 0) return null
+      return response[0]
+    } catch (error) {
+      this.handleError("getGlamProductById", error)
       throw error
     }
   }

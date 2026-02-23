@@ -1,8 +1,10 @@
 # Plan de Implementación – Creación de Productos
 
 > **Documento técnico de implementación**  
-> Basado en `spec.md` v1.0  
-> Define **CÓMO** se implementará el sistema
+> Basado en `spec.md` v3.0  
+> Define **CÓMO** se implementará la creación de productos  
+> Para plan de edición, ver `specs/product/update/plan.md`  
+> Para plan de lista, ver `specs/product/list/plan.md`
 
 ---
 
@@ -15,7 +17,7 @@
 - **Cliente HTTP solo servidor**: Nunca importar clientes HTTP en componentes `"use client"`
 - **Storage reutilizable**: Crear cliente de Storage siguiendo patrón de `project-storage-client.ts`
 
-### 1.2 Estructura de archivos a crear
+### 1.2 Estructura de archivos a crear/modificar
 
 ```
 lib/
@@ -28,39 +30,35 @@ lib/
 │       └── types.ts                    # Re-export de tipos
 ├── types/
 │   └── product/
-│       └── types.ts                    # Tipos del dominio de productos
+│       └── types.ts                    # Tipos del dominio de productos [MODIFICAR]
 └── utils/
     └── image-compressor.ts             # (Reutilizar existente)
 
 app/
 ├── api/
 │   └── product/
-│       ├── route.ts                    # POST crear, GET listar
-│       ├── [id]/
-│       │   └── route.ts                # GET, PATCH, DELETE producto
+│       ├── route.ts                    # POST crear producto
 │       └── [id]/
 │           └── images/
 │               └── route.ts            # POST subir, DELETE eliminar imagen
 └── project/
     └── [id]/
         └── products/
-            ├── page.tsx                # Lista de productos del proyecto
-            ├── new/
-            │   └── page.tsx            # Formulario creación
-            └── [productId]/
-                └── edit/
-                    └── page.tsx        # Formulario edición
+            └── new/
+                └── page.tsx            # Formulario creación
 
 components/
 └── product/
-    ├── product-form.tsx                # Formulario principal (Client Component)
+    ├── product-form.tsx                # Formulario principal [MODIFICAR]
     ├── category-selector.tsx           # Selector de categoría
+    ├── glam-product-selector.tsx       # Selector de producto del catálogo
+    ├── attribute-selector.tsx          # Selector de atributos
     ├── personalization-config.tsx      # Configurador de módulos
-    ├── image-manager.tsx               # Gestor de imágenes
+    ├── image-manager.tsx               # Gestor de imágenes (independiente del form de edición)
     ├── image-upload.tsx                # Componente de subida
     ├── image-gallery.tsx               # Galería con reordenamiento
-    ├── status-section.tsx              # Sección de estado
-    └── visual-mode-selector.tsx        # Selector de modo visual
+    ├── cost-summary-section.tsx        # Sección de precio tentativo
+    └── confirm-cancel-modal.tsx        # Modal de cancelar
 ```
 
 ---
@@ -94,7 +92,6 @@ export interface ProductImage { ... }
 
 // DTOs
 export interface CreateProductDTO { ... }
-export interface UpdateProductDTO { ... }
 export interface CreateProductImageDTO { ... }
 
 // Configuración de personalización
@@ -112,14 +109,16 @@ export const ALLOWED_IMAGE_FORMATS = ["png", "jpg", "jpeg", "webp"]
 
 // Validaciones
 export function validateProductName(name: string): { valid: boolean; error?: string }
+export function validateProductDescription(description: string): { valid: boolean; error?: string }
 export function validateBasePrice(price: number): { valid: boolean; error?: string }
+export function validateCategory(categoryId: string | null): { valid: boolean; error?: string }
 export function canActivateProduct(product: Product): { valid: boolean; errors: string[] }
 export function isValidStatusTransition(current: ProductStatus, next: ProductStatus): boolean
+export function buildDefaultPersonalizationConfig(allowedModules: PersonalizationModuleCode[]): PersonalizationConfig
 
 // Transformaciones
 export function toProduct(backend: BackendProduct): Product
 export function toCreateDTO(input: CreateProductInput, projectId: string): CreateProductDTO
-export function toUpdateDTO(input: UpdateProductInput): UpdateProductDTO
 ```
 
 #### 2.1.2 Crear cliente HTTP de productos (`lib/http/product/product-client.ts`)
@@ -139,7 +138,6 @@ class ProductClient {
   async createProduct(dto: CreateProductDTO): Promise<BackendProduct>
   async getProduct(id: string): Promise<BackendProduct | null>
   async getProductsByProject(projectId: string): Promise<BackendProduct[]>
-  async updateProduct(id: string, dto: UpdateProductDTO): Promise<BackendProduct>
   
   // Imágenes
   async getProductImages(productId: string): Promise<BackendProductImage[]>
@@ -177,36 +175,27 @@ export function getProductStorageClient(): ProductStorageClient
 
 ---
 
-### Fase 2: API Routes
+### Fase 2: API Routes (Creación)
 
-**Objetivo**: Crear endpoints para operaciones de productos
+**Objetivo**: Crear endpoints para creación de productos e imágenes
 
-#### 2.2.1 API de productos (`app/api/product/route.ts`)
+#### 2.2.1 API de creación de productos (`app/api/product/route.ts`)
 
 ```typescript
 // POST /api/product - Crear producto
 // - Validar sesión y rol organizador
 // - Validar que el usuario es dueño del proyecto
+// - Validar nombre y descripción no vacíos (RN-19)
+// - Validar categoría seleccionada (RN-43)
+// - Validar glam_product_id proporcionado (RN-03)
 // - Validar categoría existe
 // - Validar módulos están permitidos por categoría
+// - Validar que personalization_config incluye todos los módulos de la categoría (RN-45)
+// - Precio = 0 si no hay glam_product seleccionado (RN-41)
 // - Crear producto en estado draft
-
-// GET /api/product?projectId=xxx - Listar productos del proyecto
-// - Validar sesión
-// - Validar permisos sobre el proyecto
-// - Retornar productos con imágenes
 ```
 
-#### 2.2.2 API de producto individual (`app/api/product/[id]/route.ts`)
-
-```typescript
-// GET /api/product/[id] - Obtener producto
-// PATCH /api/product/[id] - Actualizar producto
-// - Si status cambia a active, validar mínimo 3 imágenes
-// - Si producto no es draft, rechazar cambios a personalization_config
-```
-
-#### 2.2.3 API de imágenes (`app/api/product/[id]/images/route.ts`)
+#### 2.2.2 API de imágenes (`app/api/product/[id]/images/route.ts`)
 
 ```typescript
 // POST /api/product/[id]/images - Subir imagen
@@ -223,65 +212,57 @@ export function getProductStorageClient(): ProductStorageClient
 
 ---
 
-### Fase 3: Páginas SSR
+### Fase 3: Páginas SSR (Creación)
 
-**Objetivo**: Crear páginas de gestión de productos
+**Objetivo**: Crear página de creación de productos
 
-#### 2.3.1 Lista de productos (`app/project/[id]/products/page.tsx`)
-
-- Server Component
-- Validar sesión y permisos
-- Obtener productos del proyecto
-- Renderizar tabla/grid de productos con estado, imágenes, acciones
-
-#### 2.3.2 Crear producto (`app/project/[id]/products/new/page.tsx`)
+#### 2.3.1 Crear producto (`app/project/[id]/products/new/page.tsx`)
 
 - Server Component
 - Validar sesión y permisos
 - Obtener categorías y módulos
 - Renderizar formulario (Client Component)
 
-#### 2.3.3 Editar producto (`app/project/[id]/products/[productId]/edit/page.tsx`)
-
-- Server Component
-- Validar sesión y permisos
-- Obtener producto con imágenes
-- Verificar si configuración es editable (draft vs active)
-- Renderizar formulario con datos
-
 ---
 
-### Fase 4: Componentes de UI
+### Fase 4: Componentes de UI (Creación)
 
-**Objetivo**: Crear componentes del formulario de productos
+**Objetivo**: Crear componentes del formulario de creación de productos
 
 #### 2.4.1 Formulario principal (`components/product/product-form.tsx`)
 
 - Client Component (`"use client"`)
 - Maneja estado del formulario
-- Secciones: Categoría → Info básica → Personalización → Imágenes → Estado
+- Flujo secuencial: Info básica → Categoría → Producto del catálogo → Atributos → Personalización → Precio tentativo
+- **Precio inicial = 0** (RN-41): Mientras no se seleccione un producto del catálogo, el precio es `0`
+- **Reset al cambiar categoría** (RN-42): limpia producto del catálogo, atributos, personalización, precios
+- **Campos obligatorios** (RN-19, RN-43): Nombre, descripción, categoría y producto del catálogo
+- **Personalización siempre enviada** (RN-44, RN-45): `personalization_config` incluye todos los módulos de la categoría
 - Validaciones en tiempo real
 - Submit a API Routes
 
 #### 2.4.2 Selector de categoría (`components/product/category-selector.tsx`)
 
-- Muestra categorías disponibles
-- Al seleccionar, actualiza módulos permitidos
-- Advertencia si cambia categoría con módulos configurados
+- Muestra categorías disponibles (selección obligatoria, RN-43)
+- Al seleccionar, actualiza módulos permitidos y lista de productos del catálogo
+- **Al cambiar categoría** (RN-42): ejecuta reset completo
+- Emite callback `onCategoryChange`
 
 #### 2.4.3 Configurador de personalización (`components/product/personalization-config.tsx`)
 
-- Muestra módulos permitidos por categoría
+- Muestra TODOS los módulos permitidos por categoría
+- **Valor por defecto** (RN-44): cada módulo se inicializa con `enabled: false`
 - Toggle para habilitar/deshabilitar cada módulo
+- **Envío obligatorio** (RN-45): todos los módulos enviados en payload
 - Configuración específica por módulo:
   - sizes: selector múltiple de opciones
   - numbers: rango min/max
   - names: longitud máxima
   - age_categories: selector múltiple
-- Deshabilitado si producto no es draft
 
 #### 2.4.4 Gestor de imágenes (`components/product/image-manager.tsx`)
 
+- **Independiente del formulario de edición** (RN-50)
 - Selector de modo visual (si categoría permite múltiples)
 - Upload Images: componente de subida + galería
 - Online Editor: botón que redirige a URL externa
@@ -302,12 +283,11 @@ export function getProductStorageClient(): ProductStorageClient
 - Botón eliminar (con validación de mínimo)
 - Indicador de imagen principal (posición 1)
 
-#### 2.4.7 Sección de estado (`components/product/status-section.tsx`)
+#### 2.4.7 Sección de precio tentativo (`components/product/cost-summary-section.tsx`)
 
-- Muestra estado actual con badge de color
-- Botones de acción según transiciones válidas
-- Modal de confirmación para activar/desactivar
-- Validación de requisitos para activación
+- Muestra desglose: precio base, recargos atributos, comisión, IVA, total
+- Solo lectura (calculado automáticamente)
+- Se actualiza al seleccionar producto del catálogo y atributos
 
 ---
 
@@ -317,15 +297,12 @@ export function getProductStorageClient(): ProductStorageClient
 Fase 1 (Fundamentos)
 ├── 1.1 Tipos ──────────────────┐
 ├── 1.2 Cliente HTTP ───────────┼──► Fase 2 (APIs)
-└── 1.3 Cliente Storage ────────┘    ├── 2.1 API productos
-                                     ├── 2.2 API producto [id]
-                                     └── 2.3 API imágenes
+└── 1.3 Cliente Storage ────────┘    ├── 2.1 API crear producto
+                                     └── 2.2 API imágenes
                                               │
                                               ▼
                                      Fase 3 (Páginas SSR)
-                                     ├── 3.1 Lista productos
-                                     ├── 3.2 Crear producto
-                                     └── 3.3 Editar producto
+                                     └── 3.1 Crear producto
                                               │
                                               ▼
                                      Fase 4 (Componentes UI)
@@ -335,7 +312,7 @@ Fase 1 (Fundamentos)
                                      ├── 4.4 Gestor imágenes
                                      ├── 4.5 Upload imágenes
                                      ├── 4.6 Galería imágenes
-                                     └── 4.7 Sección estado
+                                     └── 4.7 Precio tentativo
 ```
 
 ---
@@ -344,32 +321,37 @@ Fase 1 (Fundamentos)
 
 ### 4.1 Validaciones
 
-| Validación | Ubicación | Momento |
+| Validacion | Ubicacion | Momento |
 |------------|-----------|---------|
-| Nombre no vacío | Cliente + Servidor | Submit |
-| Precio > 0 | Cliente + Servidor | Submit |
+| Nombre no vacío (RN-19) | Cliente + Servidor | Submit |
+| Descripción no vacía (RN-19) | Cliente + Servidor | Submit |
+| Categoría seleccionada (RN-43) | Cliente + Servidor | Submit |
+| Producto del catálogo seleccionado (RN-03) | Cliente + Servidor | Submit |
+| Precio = 0 sin producto seleccionado (RN-41) | Cliente | Cambio de selección |
+| Reset completo al cambiar categoría (RN-42) | Cliente | Cambio de categoría |
+| Módulos con valor por defecto (RN-44) | Cliente | Carga de formulario |
+| Todos los módulos enviados en payload (RN-45) | Cliente + Servidor | Submit |
 | Módulos permitidos por categoría | Servidor | Submit |
-| Mínimo 3 imágenes para activar | Servidor | Cambio de estado |
 | Permisos de organizador | Servidor (Middleware + API) | Cada request |
 | Formato/tamaño imagen | Cliente + Servidor | Upload |
-| Transición de estado válida | Servidor | Cambio de estado |
-| Config inmutable si no draft | Servidor | Update |
 
 ### 4.2 Manejo de errores
 
 Usar códigos de error definidos en spec:
 - `PRODUCT_NAME_REQUIRED`
+- `PRODUCT_DESCRIPTION_REQUIRED`
+- `CATEGORY_REQUIRED`
 - `PRODUCT_PRICE_INVALID`
+- `GLAM_PRODUCT_REQUIRED`
+- `GLAM_PRODUCT_NOT_FOUND`
 - `CATEGORY_NOT_FOUND`
 - `MODULE_NOT_ALLOWED`
 - `PROJECT_NOT_FOUND`
 - `PERMISSION_DENIED`
-- `CONFIG_IMMUTABLE`
-- `INVALID_STATUS_TRANSITION`
-- `INSUFFICIENT_IMAGES`
 - `INVALID_IMAGE_FORMAT`
 - `IMAGE_TOO_LARGE`
-- `MIN_IMAGES_REQUIRED`
+- `POSITION_DUPLICATE`
+- `IMAGE_NOT_FOUND`
 
 ### 4.3 Transacciones y rollback
 
@@ -409,19 +391,21 @@ Donde `ONLINE_EDITOR_BASE_URL` será una variable de entorno (por definir).
 
 - Validaciones de tipos (`types.ts`)
 - Transformaciones backend ↔ frontend
-- Lógica de transiciones de estado
+- `toCreateDTO()` con diferentes inputs
 
 ### 5.2 Tests de integración
 
 - API Routes con mocks de BD
 - Flujo completo de creación de producto
 - Flujo de subida de imágenes
+- POST con campos obligatorios faltantes
 
 ### 5.3 Tests E2E (si aplica)
 
 - Crear producto completo con imágenes
-- Activar producto
-- Editar producto activo (verificar restricciones)
+- Crear producto sin atributos
+- Crear producto sin personalización
+- Error al crear sin nombre/descripción/categoría
 
 ---
 
@@ -434,42 +418,35 @@ Donde `ONLINE_EDITOR_BASE_URL` será una variable de entorno (por definir).
 - [ ] Crear `lib/http/product/index.ts` (re-exports)
 
 ### Fase 2: API Routes
-- [ ] Crear `app/api/product/route.ts`
-- [ ] Crear `app/api/product/[id]/route.ts`
+- [ ] Crear `app/api/product/route.ts` (POST crear)
 - [ ] Crear `app/api/product/[id]/images/route.ts`
 
 ### Fase 3: Páginas
-- [ ] Crear `app/project/[id]/products/page.tsx`
 - [ ] Crear `app/project/[id]/products/new/page.tsx`
-- [ ] Crear `app/project/[id]/products/[productId]/edit/page.tsx`
 
 ### Fase 4: Componentes
-- [ ] Crear `components/product/product-form.tsx`
+- [ ] Crear/Modificar `components/product/product-form.tsx`
 - [ ] Crear `components/product/category-selector.tsx`
+- [ ] Crear `components/product/glam-product-selector.tsx`
+- [ ] Crear `components/product/attribute-selector.tsx`
 - [ ] Crear `components/product/personalization-config.tsx`
 - [ ] Crear `components/product/image-manager.tsx`
 - [ ] Crear `components/product/image-upload.tsx`
 - [ ] Crear `components/product/image-gallery.tsx`
-- [ ] Crear `components/product/status-section.tsx`
-- [ ] Crear `components/product/visual-mode-selector.tsx`
-
-### Integración
-- [ ] Agregar enlace a productos desde dashboard de proyecto
-- [ ] Agregar navegación en sidebar/menú
-- [ ] Probar flujo completo E2E
+- [ ] Crear `components/product/cost-summary-section.tsx`
 
 ---
 
 ## 7. Estimación de esfuerzo
 
-| Fase | Tareas | Estimación |
+| Fase | Tareas | Estimacion |
 |------|--------|------------|
 | Fase 1 | Tipos y Clientes | 4-6 horas |
-| Fase 2 | API Routes | 4-6 horas |
-| Fase 3 | Páginas SSR | 3-4 horas |
-| Fase 4 | Componentes UI | 8-12 horas |
-| Testing | Unit + Integration | 4-6 horas |
-| **Total** | | **23-34 horas** |
+| Fase 2 | API Routes (creación + imágenes) | 3-4 horas |
+| Fase 3 | Página SSR creación | 1-2 horas |
+| Fase 4 | Componentes UI creación | 8-10 horas |
+| Testing | Unit + Integration | 3-4 horas |
+| **Total** | | **19-26 horas** |
 
 ---
 
@@ -481,3 +458,4 @@ Donde `ONLINE_EDITOR_BASE_URL` será una variable de entorno (por definir).
 4. **Patrones existentes**: Revisar código existente antes de crear nuevo
 5. **No sobre-ingeniería**: Implementar solo lo especificado en spec.md
 6. **Preguntar dudas**: Si algo no está claro, preguntar antes de implementar
+7. **Solo creación**: Este plan cubre solo la creación de productos. Para edición ver `specs/product/update/plan.md`, para lista ver `specs/product/list/plan.md`

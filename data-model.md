@@ -24,7 +24,7 @@ El modelo de datos está organizado en el esquema `gssc_db` y cubre los siguient
 | **Usuarios** | `glam_users` | Gestión de usuarios de la plataforma |
 | **Facturación** | `billing_profiles`, `bank_accounts`, `billing_documents` | Perfiles fiscales y cuentas bancarias de organizadores |
 | **Proyectos** | `glam_projects`, `glam_project_config_changes` | Proyectos comerciales y auditoría de cambios |
-| **Productos** | `product_categories`, `personalization_modules`, `project_products`, `product_images` | Catálogo de productos y configuración |
+| **Productos** | `product_categories`, `personalization_modules`, `product_attributes`, `product_attribute_options`, `glam_products`, `project_products`, `product_images` | Catálogos, atributos, productos por proyecto e imágenes |
 | **Ventas** | `promotions`, `volume_discount_rules`, `sales`, `sale_items`, `sale_breakdowns`, `sale_promotions`, `sale_taxes`, `sale_billing_references` | Ledger de ventas, promociones y desglose monetario |
 | **Vistas** | `project_sales_summary` | Resumen de ventas por proyecto para dashboard "Mis proyectos" |
 
@@ -461,7 +461,6 @@ Catálogo maestro de categorías (gestionado por plataforma).
 | `code` | TEXT | NO | - | Código único e inmutable |
 | `name` | TEXT | NO | - | Nombre legible |
 | `description` | TEXT | YES | - | Descripción funcional |
-| `allowed_visual_modes` | `visual_mode[]` | NO | - | Modos visuales permitidos |
 | `allowed_modules` | `personalization_module_code[]` | NO | - | Módulos de personalización permitidos |
 | `created_at` | TIMESTAMPTZ | NO | `now()` | Fecha de creación |
 | `updated_at` | TIMESTAMPTZ | NO | `now()` | Fecha de última actualización |
@@ -474,17 +473,18 @@ Catálogo maestro de categorías (gestionado por plataforma).
 - `UNIQUE (code)`
 - `chk_category_code_not_empty` - Código no vacío
 - `chk_category_name_not_empty` - Nombre no vacío
-- `chk_allowed_visual_modes_not_empty` - Al menos un modo visual
 - `chk_allowed_modules_not_empty` - Al menos un módulo
 
 **Datos Semilla:**
 
-| Código | Nombre | Modos Visuales | Módulos |
-|--------|--------|----------------|---------|
-| `jersey` | Camiseta/Jersey | upload_images, online_editor, designer_assisted | sizes, numbers, names |
-| `shorts` | Shorts/Pantalón corto | upload_images, online_editor, designer_assisted | sizes |
-| `tracksuit` | Conjunto deportivo | upload_images, designer_assisted | sizes, age_categories |
-| `accessories` | Accesorios | upload_images | sizes |
+| Código | Nombre | Módulos |
+|--------|--------|---------|
+| `jersey` | Camiseta/Jersey | sizes, numbers, names |
+| `shorts` | Shorts/Pantalón corto | sizes |
+| `tracksuit` | Conjunto deportivo | sizes, age_categories |
+| `accessories` | Accesorios | sizes |
+| `mugs` | Mugs | sizes |
+| `termos` | Termos | sizes |
 
 ---
 
@@ -516,36 +516,161 @@ Catálogo cerrado de módulos de personalización (definidos por plataforma).
 
 ---
 
-### 9. `project_products` - Productos de Proyecto
+### 9. `product_attributes` - Catálogo de Atributos de Producto
 
-Productos configurados por organizadores dentro de proyectos.
+Catálogo maestro de tipos de atributos de producto. Los atributos son propiedades del producto físico que el comprador selecciona (ej. calidad, color, material). Reutilizable entre múltiples productos mediante junction table M:N.
+
+| Columna | Tipo | Nullable | Default | Descripción |
+|---------|------|----------|---------|-------------|
+| `id` | UUID | NO | `gen_random_uuid()` | Identificador único |
+| `code` | TEXT | NO | - | Código único (ej. `quality`, `color`, `material`) |
+| `name` | TEXT | NO | - | Nombre legible (ej. Calidad, Color) |
+| `description` | TEXT | YES | - | Descripción del atributo |
+| `is_active` | BOOLEAN | NO | `true` | Si está disponible para asignación a productos |
+| `created_at` | TIMESTAMPTZ | NO | `now()` | Fecha de creación |
+| `updated_at` | TIMESTAMPTZ | NO | `now()` | Fecha de última actualización |
+
+**Índices:**
+- `idx_product_attributes_code` - Búsquedas por código
+- `idx_product_attributes_is_active` - Filtros por activo
+
+**Constraints:**
+- `PRIMARY KEY (id)`
+- `UNIQUE (code)`
+- `chk_product_attributes_code_not_empty` - Código no vacío
+- `chk_product_attributes_name_not_empty` - Nombre no vacío
+
+**Datos Semilla:**
+
+| code | name | description |
+|------|------|-------------|
+| `quality` | Calidad | Nivel de calidad del producto |
+| `color` | Color | Color del producto |
+| `material` | Material | Material de fabricación del producto |
+
+---
+
+### 10. `product_attribute_options` - Opciones de Atributos
+
+Opciones disponibles por atributo de producto. Cada atributo tiene múltiples opciones (ej. para "calidad" → estándar, premium).
+
+| Columna | Tipo | Nullable | Default | Descripción |
+|---------|------|----------|---------|-------------|
+| `id` | UUID | NO | `gen_random_uuid()` | Identificador único |
+| `attribute_id` | UUID | NO | - | FK → `product_attributes.id` |
+| `code` | TEXT | NO | - | Código dentro del atributo (ej. `estandar`, `premium`) |
+| `name` | TEXT | NO | - | Nombre legible (ej. Estándar, Premium) |
+| `display_order` | INTEGER | NO | `1` | Orden de visualización |
+| `is_active` | BOOLEAN | NO | `true` | Si la opción está disponible |
+| `created_at` | TIMESTAMPTZ | NO | `now()` | Fecha de creación |
+| `updated_at` | TIMESTAMPTZ | NO | `now()` | Fecha de última actualización |
+
+**Índices:**
+- `idx_product_attribute_options_attribute_id` - Búsquedas por atributo
+- `idx_product_attribute_options_is_active` - Filtros por activo
+
+**Constraints:**
+- `PRIMARY KEY (id)`
+- `FOREIGN KEY (attribute_id) REFERENCES product_attributes(id) ON DELETE CASCADE`
+- `UNIQUE (attribute_id, code)` - No duplicar códigos por atributo
+- `chk_attribute_option_code_not_empty` - Código no vacío
+- `chk_attribute_option_name_not_empty` - Nombre no vacío
+- `chk_attribute_option_display_order_positive` - display_order >= 1
+
+**Datos Semilla:**
+
+| Atributo | code | name | display_order |
+|----------|------|------|---------------|
+| quality | `estandar` | Estándar | 1 |
+| quality | `premium` | Premium | 2 |
+| color | `blanco` | Blanco | 1 |
+| color | `negro` | Negro | 2 |
+| color | `azul` | Azul | 3 |
+| color | `rojo` | Rojo | 4 |
+| material | `ceramica` | Cerámica | 1 |
+| material | `acero_inoxidable` | Acero Inoxidable | 2 |
+| material | `plastico_bpa_free` | Plástico BPA Free | 3 |
+
+---
+
+### 11. `glam_products` - Catálogo Maestro de Productos Glam Urban
+
+Lista de productos que Glam Urban ofrece como proveedor (mugs, termos, etc.). El usuario selecciona primero una categoría y luego ve los productos de esa categoría. Los atributos disponibles y sus modificadores de precio se almacenan en `attributes_config` (JSONB).
+
+| Columna | Tipo | Nullable | Default | Descripción |
+|---------|------|----------|---------|-------------|
+| `id` | UUID | NO | `gen_random_uuid()` | Identificador único |
+| `code` | TEXT | NO | - | Código único (ej. `mug-9oz`, `termo-600ml`) |
+| `name` | TEXT | NO | - | Nombre legible |
+| `description` | TEXT | YES | - | Descripción |
+| `category_id` | UUID | NO | - | FK → `product_categories.id` |
+| `base_price` | NUMERIC(12,2) | NO | - | Precio base |
+| `attributes_config` | JSONB | NO | `'{}'` | Opciones de atributos disponibles con modificadores de precio |
+| `image_url` | TEXT | YES | - | URL de imagen del producto en Storage (`product-images/glam_products/`) |
+| `is_active` | BOOLEAN | NO | `true` | Si el producto está disponible en catálogo |
+| `created_at` | TIMESTAMPTZ | NO | `now()` | Fecha de creación |
+| `updated_at` | TIMESTAMPTZ | NO | `now()` | Fecha de última actualización |
+
+**Índices:**
+- `idx_glam_products_code` - Búsquedas por código
+- `idx_glam_products_category_id` - Productos por categoría
+- `idx_glam_products_is_active` - Filtros por activo
+
+**Constraints:**
+- `PRIMARY KEY (id)`
+- `UNIQUE (code)`
+- `FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE RESTRICT`
+- `chk_glam_products_code_not_empty` - Código no vacío
+- `chk_glam_products_name_not_empty` - Nombre no vacío
+- `chk_glam_products_base_price_positive` - Precio > 0
+- `chk_glam_products_attributes_config_object` - attributes_config debe ser objeto JSON
+
+**Estructura de `attributes_config`:**
+```json
+{
+  "quality": {
+    "options": ["estándar", "premium"],
+    "price_modifier": {"estándar": 0, "premium": 3000}
+  }
+}
+```
+
+**Datos semilla:** Mug 9 oz, Mug 15 oz, Termo 600 ml, Termo 1000 ml (categorías `mugs`, `termos`).
+
+---
+
+### 12. `project_products` - Productos de Proyecto
+
+Productos configurados por organizadores dentro de proyectos. Siempre referencian un producto del catálogo maestro (`glam_product_id`, obligatorio). La categoría se hereda del `glam_product`. La personalización y los atributos seleccionados se almacenan como JSONB inmutable.
 
 | Columna | Tipo | Nullable | Default | Descripción |
 |---------|------|----------|---------|-------------|
 | `id` | UUID | NO | `gen_random_uuid()` | Identificador único |
 | `project_id` | UUID | NO | - | FK → `glam_projects.id` |
-| `category_id` | UUID | NO | - | FK → `product_categories.id` |
+| `glam_product_id` | UUID | NO | - | FK → `glam_products.id` (producto del catálogo del que deriva, obligatorio) |
 | `name` | TEXT | NO | - | Nombre comercial del producto |
 | `description` | TEXT | YES | - | Descripción comercial |
 | `status` | `product_status` | NO | `'draft'` | Estado: `draft`, `active`, `inactive` |
-| `base_price` | NUMERIC(12,2) | NO | - | Precio base (sin personalizaciones) |
-| `personalization_config` | JSONB | NO | - | Configuración de módulos (inmutable) |
+| `price` | NUMERIC(12,2) | NO | - | Precio del producto |
+| `personalization_config` | JSONB | NO | - | Configuración de módulos de personalización (inmutable) |
+| `selected_attributes` | JSONB | NO | `'{}'` | Atributos seleccionados del producto (inmutable) |
 | `created_at` | TIMESTAMPTZ | NO | `now()` | Fecha de creación |
 | `updated_at` | TIMESTAMPTZ | NO | `now()` | Fecha de última actualización |
 
 **Índices:**
 - `idx_project_products_project_id` - Búsquedas por proyecto
-- `idx_project_products_category_id` - Búsquedas por categoría
+- `idx_project_products_glam_product_id` - Búsquedas por producto catálogo
 - `idx_project_products_status` - Filtros por estado
 - `idx_project_products_created_at` - Ordenamiento por fecha
 
 **Constraints:**
 - `PRIMARY KEY (id)`
 - `FOREIGN KEY (project_id) REFERENCES glam_projects(id) ON DELETE RESTRICT`
-- `FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE RESTRICT`
+- `FOREIGN KEY (glam_product_id) REFERENCES glam_products(id) ON DELETE RESTRICT`
 - `chk_product_name_not_empty` - Nombre no vacío
-- `chk_base_price_positive` - Precio > 0
+- `chk_price_positive` - Precio > 0
 - `chk_personalization_config_is_object` - Config debe ser objeto JSON
+- `chk_selected_attributes_is_object` - Atributos seleccionados debe ser objeto JSON
 
 **Estructura de `personalization_config`:**
 ```json
@@ -569,9 +694,23 @@ Productos configurados por organizadores dentro de proyectos.
 }
 ```
 
+**Estructura de `selected_attributes`:**
+```json
+{
+  "quality": {
+    "selected_option": "premium",
+    "price_modifier": 3000
+  },
+  "color": {
+    "selected_option": "blanco",
+    "price_modifier": 0
+  }
+}
+```
+
 ---
 
-### 10. `product_images` - Imágenes de Producto
+### 13. `product_images` - Imágenes de Producto
 
 Imágenes finales que se muestran al comprador (mínimo 3 por producto).
 
@@ -598,7 +737,7 @@ Imágenes finales que se muestran al comprador (mínimo 3 por producto).
 
 ---
 
-### 11. `promotions` - Promociones
+### 14. `promotions` - Promociones
 
 Catálogo maestro de promociones (descuentos, envío gratis, etc.).
 
@@ -633,7 +772,7 @@ Catálogo maestro de promociones (descuentos, envío gratis, etc.).
 
 ---
 
-### 12. `volume_discount_rules` - Reglas de Descuento por Cantidad
+### 15. `volume_discount_rules` - Reglas de Descuento por Cantidad
 
 Reglas de descuento por cantidad asociadas a promociones de tipo `volume`.
 
@@ -657,7 +796,7 @@ Reglas de descuento por cantidad asociadas a promociones de tipo `volume`.
 
 ---
 
-### 13. `sales` - Ventas
+### 16. `sales` - Ventas
 
 Ledger financiero y comercial; ventas web GSSC (inmutables una vez creadas).
 
@@ -699,7 +838,7 @@ Ledger financiero y comercial; ventas web GSSC (inmutables una vez creadas).
 
 ---
 
-### 14. `sale_items` - Ítems de Venta
+### 17. `sale_items` - Ítems de Venta
 
 Ítems de producto comprados en una venta; snapshot inmutable de precios y personalización.
 
@@ -729,7 +868,7 @@ Ledger financiero y comercial; ventas web GSSC (inmutables una vez creadas).
 
 ---
 
-### 15. `sale_breakdowns` - Desglose de Venta
+### 18. `sale_breakdowns` - Desglose de Venta
 
 Desglose monetario completo de una venta (relación 1:1 con `sales`).
 
@@ -754,7 +893,7 @@ Desglose monetario completo de una venta (relación 1:1 con `sales`).
 
 ---
 
-### 16. `sale_promotions` - Promociones Aplicadas a Ventas
+### 19. `sale_promotions` - Promociones Aplicadas a Ventas
 
 Registro de promociones aplicadas a una venta o a un ítem.
 
@@ -780,7 +919,7 @@ Registro de promociones aplicadas a una venta o a un ítem.
 
 ---
 
-### 17. `sale_taxes` - Impuestos por Venta
+### 20. `sale_taxes` - Impuestos por Venta
 
 Impuestos aplicados a una venta (ej. IVA).
 
@@ -803,7 +942,7 @@ Impuestos aplicados a una venta (ej. IVA).
 
 ---
 
-### 18. `sale_billing_references` - Referencias de Facturación por Venta
+### 21. `sale_billing_references` - Referencias de Facturación por Venta
 
 Referencias de facturación por venta; snapshot sin FK a `billing_profiles` para inmutabilidad.
 
@@ -846,7 +985,7 @@ Vista de solo lectura que consolida ventas por proyecto para el dashboard **"Mis
 
 **Origen:** `glam_projects` (LEFT JOIN a agregaciones de `sales`, `sale_items`, `sale_breakdowns`). Solo se incluyen ventas con `sale_status = 'paid'`. Proyectos sin ventas aparecen con `orders_count = 0`, `units_sold = 0`, `organizer_commission_total = 0`, `currency` y `last_sale_at` en null.
 
-**Seguridad:** Vista con `security_invoker = true` y filtro `WHERE glam_projects.organizer_id = auth.uid()`. Solo los roles `authenticated` y `service_role` tienen `SELECT`; el organizador solo ve sus propios proyectos.
+**Seguridad:** Vista con `security_invoker = true`. Filtro: `organizer_id = auth.uid()` para usuarios autenticados (el organizador solo ve sus propios proyectos). Los roles `postgres` y `service_role` ven todos los proyectos (útil para SQL Editor o BFF que filtra por `organizer_id` en la query). Roles con `SELECT`: `authenticated`, `service_role`, `anon` (anon devuelve lista vacía si no hay sesión).
 
 **Uso:** Consumir con usuario autenticado (JWT) para listar resumen de proyectos en el dashboard. Orden sugerido: proyectos más recientes primero (p. ej. por `last_sale_at` DESC NULLS LAST).
 
@@ -879,7 +1018,11 @@ glam_projects (1) ───┬──── (0..n) glam_project_config_changes
                      │
                      └──── (0..n) sales
 
-product_categories (1) ──── (0..n) project_products
+product_categories (1) ──────── (0..n) glam_products
+
+product_attributes (1) ──────── (0..n) product_attribute_options
+
+glam_products (1) ──────── (1..n) project_products [como glam_product_id, obligatorio]
 
 project_products (1) ───┬── (0..n) product_images
                         │
@@ -914,8 +1057,10 @@ sale_items (1) ──────── (0..n) sale_promotions [como sale_item_i
 | `glam_projects` | `updated_by` | `glam_users` | - |
 | `glam_project_config_changes` | `project_id` | `glam_projects` | CASCADE |
 | `glam_project_config_changes` | `changed_by` | `glam_users` | - |
+| `glam_products` | `category_id` | `product_categories` | RESTRICT |
+| `product_attribute_options` | `attribute_id` | `product_attributes` | CASCADE |
 | `project_products` | `project_id` | `glam_projects` | RESTRICT |
-| `project_products` | `category_id` | `product_categories` | RESTRICT |
+| `project_products` | `glam_product_id` | `glam_products` | RESTRICT |
 | `product_images` | `product_id` | `project_products` | CASCADE |
 | `volume_discount_rules` | `promotion_id` | `promotions` | CASCADE |
 | `sales` | `project_id` | `glam_projects` | RESTRICT |
@@ -1072,13 +1217,14 @@ product-images/
                                                       ├────────────────────────────────┤  ├───────────────────────────────┤
                                                       │ PK id: UUID                    │  │ PK id: UUID                   │
                                                       │ FK project_id: UUID            │  │ FK project_id: UUID           │
-                                                      │    field_name: config_change_field│ FK category_id: UUID          │
+                                                      │    field_name: config_change_field│ FK glam_product_id: UUID (NOT NULL)│
                                                       │    old_value: JSONB            │  │    name: TEXT                 │
                                                       │    new_value: JSONB            │  │    description: TEXT          │
                                                       │ FK changed_by: UUID            │  │    status: product_status     │
-                                                      │    changed_at: TIMESTAMPTZ     │  │    base_price: NUMERIC(12,2)  │
+                                                      │    changed_at: TIMESTAMPTZ     │  │    price: NUMERIC(12,2)       │
                                                       │    reason: TEXT                │  │    personalization_config: JSONB│
-                                                      └────────────────────────────────┘  │    created_at                 │
+                                                      └────────────────────────────────┘  │    selected_attributes: JSONB  │
+                                                                                          │    created_at                 │
                                                                                           │    updated_at                 │
                                                                                           └───────────────────────────────┘
                                                                                                    │
@@ -1146,17 +1292,41 @@ glam_projects (1) ─── 0..n ──► sales    glam_users (organizer_id, bu
 │    code: TEXT (UNIQUE)          │           │    code: personalization_module_code│
 │    name: TEXT                   │           │    name: TEXT                   │
 │    description: TEXT            │           │    description: TEXT            │
-│    allowed_visual_modes: []     │           │    created_at                   │
-│    allowed_modules: []          │           │    updated_at                   │
-│    created_at                   │           └─────────────────────────────────┘
-│    updated_at                   │
+│    allowed_modules: []          │           │    created_at                   │
+│    created_at                   │           │    updated_at                   │
+│    updated_at                   │           └─────────────────────────────────┘
 └─────────────────────────────────┘
          │
          │ 1
-         │
          │ 0..n
          ▼
-   project_products
+   glam_products ──── 1..n ──► project_products
+   (code, name,               (glam_product_id obligatorio,
+    base_price,                price, selected_attributes,
+    attributes_config)         personalization_config)
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    ATRIBUTOS DE PRODUCTO (Catálogo)                                          │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────┐     ┌───────────────────────────┐
+│  product_attributes   │     │ product_attribute_options  │
+├───────────────────────┤     ├───────────────────────────┤
+│ PK id: UUID           │ 1   │ PK id: UUID               │
+│    code: TEXT (UNIQUE)│──>N │ FK attribute_id: UUID      │
+│    name: TEXT         │     │    code: TEXT              │
+│    description: TEXT  │     │    name: TEXT              │
+│    is_active: BOOLEAN │     │    display_order: INTEGER  │
+│    created_at         │     │    is_active: BOOLEAN      │
+│    updated_at         │     │    created_at              │
+└───────────────────────┘     │    updated_at              │
+                              └───────────────────────────┘
+                              UNIQUE(attribute_id, code)
+
+Nota: glam_products.attributes_config (JSONB) almacena las opciones disponibles
+      y modificadores de precio por producto.
+      project_products.selected_attributes (JSONB) almacena las selecciones
+      del organizador (inmutable, como personalization_config).
 ```
 
 ---
@@ -1180,14 +1350,15 @@ Todas las tablas principales incluyen:
 ### Soft Delete vs Hard Delete
 
 - **CASCADE**: `billing_profiles`, `bank_accounts`, `billing_documents`, `glam_project_config_changes`, `product_images`, `volume_discount_rules`, `sale_items`, `sale_breakdowns`, `sale_promotions`, `sale_taxes`, `sale_billing_references`
-- **RESTRICT**: `project_products` (no se puede eliminar proyecto con productos), `sales` (proyecto), `sale_items` (producto), `sale_promotions` (promoción)
+- **RESTRICT**: `project_products` (no se puede eliminar proyecto con productos ni glam_product con project_products), `sales` (proyecto), `sale_items` (producto), `sale_promotions` (promoción)
 
 ### Campos Inmutables
 
 - `glam_projects.name`: No editable después de creación
 - `project_products.personalization_config`: Inmutable después de creación
+- `project_products.selected_attributes`: Inmutable después de creación
 - Dominio ventas: `sales`, `sale_items`, `sale_breakdowns`, `sale_promotions`, `sale_taxes`, `sale_billing_references` son inmutables una vez creados (ledger)
 
 ---
 
-*Última actualización: Enero 2026*
+*Última actualización: Febrero 2026*
