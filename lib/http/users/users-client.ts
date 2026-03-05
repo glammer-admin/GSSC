@@ -50,23 +50,29 @@ class UsersClient {
   }
 
   /**
-   * Headers para peticiones GET
+   * Headers para peticiones GET — usa service_role key (bypass RLS para BFF)
+   * glam_users solo permite SELECT por auth_id con JWT de usuario;
+   * el BFF necesita buscar por email, por lo tanto requiere service_role.
    */
   private getReadHeaders(): Record<string, string> {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!serviceRoleKey) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY")
     return {
-      apikey: this.apiKey,
-      Authorization: `Bearer ${this.apiKey}`,
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
       "Accept-Profile": this.dbSchema,
     }
   }
 
   /**
-   * Headers para peticiones POST/PUT/PATCH
+   * Headers para peticiones POST/PUT/PATCH — usa service_role key (bypass RLS)
    */
   private getWriteHeaders(): Record<string, string> {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!serviceRoleKey) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY")
     return {
-      apikey: this.apiKey,
-      Authorization: `Bearer ${this.apiKey}`,
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
       "Content-Profile": this.dbSchema,
       "Content-Type": "application/json",
       Prefer: "return=representation",

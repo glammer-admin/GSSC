@@ -16,13 +16,17 @@ export type SessionRole = "buyer" | "organizer" | "supplier"
 
 // Datos de sesión completa (usuario validado con rol)
 export interface SessionData {
-  sub: string // ID del usuario (subject)
+  sub: string // ID del usuario (subject — OAuth provider sub)
   email: string
   name?: string
   picture?: string
   provider: "google" | "microsoft" | "meta"
   role: SessionRole
   userId?: string // UUID de glam_users (solo si está registrado)
+  // Supabase Auth tokens
+  supabaseAccessToken: string  // JWT emitido por Supabase Auth (usado como Bearer en REST API)
+  supabaseRefreshToken: string // Para renovar el access token
+  authId: string               // auth.users.id (UUID de Supabase Auth)
   iat: number // Issued at
   exp: number // Expiration
 }
@@ -38,6 +42,10 @@ export interface TemporarySessionData {
   needsOnboarding?: boolean // Usuario nuevo, necesita registro
   needsRoleSelection?: boolean // Usuario con múltiples roles
   availableRoles?: string[] // Roles disponibles para selección
+  // Supabase tokens — present from the callback step, preserved through onboarding/set-role
+  supabaseAccessToken?: string
+  supabaseRefreshToken?: string
+  authId?: string
   iat: number
   exp: number
 }
@@ -208,6 +216,7 @@ export async function setTemporarySessionCookie(
 
 /**
  * Actualiza la sesión con el rol seleccionado
+ * Preserves Supabase tokens from the temporary session
  */
 export async function updateSessionWithRole(
   currentSession: AnySessionData,
@@ -215,7 +224,11 @@ export async function updateSessionWithRole(
   userId?: string
 ): Promise<void> {
   console.log("🔄 [SESSION] Updating session with role:", role)
-  
+
+  const supabaseAccessToken = (currentSession as TemporarySessionData).supabaseAccessToken ?? (currentSession as SessionData).supabaseAccessToken ?? ""
+  const supabaseRefreshToken = (currentSession as TemporarySessionData).supabaseRefreshToken ?? (currentSession as SessionData).supabaseRefreshToken ?? ""
+  const authId = (currentSession as TemporarySessionData).authId ?? (currentSession as SessionData).authId ?? ""
+
   await setSessionCookie({
     sub: currentSession.sub,
     email: currentSession.email,
@@ -224,8 +237,11 @@ export async function updateSessionWithRole(
     provider: currentSession.provider,
     role,
     userId,
+    supabaseAccessToken,
+    supabaseRefreshToken,
+    authId,
   })
-  
+
   console.log("✅ [SESSION] Session updated with role:", role)
 }
 
@@ -294,7 +310,8 @@ export async function deleteSession(): Promise<void> {
 }
 
 /**
- * Refresca la sesión extendiendo su tiempo de expiración
+ * Refresca la sesión extendiendo su tiempo de expiración.
+ * Si la sesión está completa, también renueva el Supabase access token.
  */
 export async function refreshSession(): Promise<boolean> {
   try {
@@ -305,6 +322,22 @@ export async function refreshSession(): Promise<boolean> {
 
     // Si es sesión completa, refrescarla
     if (isCompleteSession(session)) {
+      let supabaseAccessToken = session.supabaseAccessToken
+      let supabaseRefreshToken = session.supabaseRefreshToken
+
+      // Renovar el token de Supabase si hay un refresh token disponible
+      if (session.supabaseRefreshToken) {
+        try {
+          const { refreshSupabaseToken } = await import("@/lib/auth/supabase-admin")
+          const renewed = await refreshSupabaseToken(session.supabaseRefreshToken)
+          supabaseAccessToken = renewed.accessToken
+          supabaseRefreshToken = renewed.refreshToken
+          console.log("✅ [SESSION] Supabase token renewed during session refresh")
+        } catch (err) {
+          console.warn("⚠️ [SESSION] Could not renew Supabase token:", err)
+        }
+      }
+
       await setSessionCookie({
         sub: session.sub,
         email: session.email,
@@ -313,9 +346,12 @@ export async function refreshSession(): Promise<boolean> {
         provider: session.provider,
         role: session.role,
         userId: session.userId,
+        supabaseAccessToken,
+        supabaseRefreshToken,
+        authId: session.authId,
       })
     } else {
-      // Si es temporal, refrescar como temporal
+      // Si es temporal, refrescar como temporal (sin renovar Supabase token)
       await setTemporarySessionCookie({
         sub: session.sub,
         email: session.email,
@@ -326,6 +362,9 @@ export async function refreshSession(): Promise<boolean> {
         needsOnboarding: session.needsOnboarding,
         needsRoleSelection: session.needsRoleSelection,
         availableRoles: session.availableRoles,
+        supabaseAccessToken: session.supabaseAccessToken,
+        supabaseRefreshToken: session.supabaseRefreshToken,
+        authId: session.authId,
       })
     }
 

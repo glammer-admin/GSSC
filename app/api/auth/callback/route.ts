@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { validateIdToken } from "@/lib/auth/jwt-validator"
-import { 
-  setSessionCookie, 
+import {
+  setSessionCookie,
   setTemporarySessionCookie,
   deleteSession,
-  type SessionRole 
+  type SessionRole
 } from "@/lib/auth/session-manager"
+import { upsertSupabaseAuthUser } from "@/lib/auth/supabase-admin"
 import { getUsersClient } from "@/lib/http/users/users-client"
-import { 
+import {
   ROLE_DASHBOARD_MAP,
-  type UserRole 
+  type UserRole
 } from "@/lib/http/users/types"
 import { HttpError, NetworkError } from "@/lib/http/client"
 import { ERROR_CODES, formatErrorLog } from "@/lib/errors/error-codes"
@@ -67,6 +68,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Email not verified" },
         { status: 403 }
+      )
+    }
+
+    // 4b. Obtener/crear Supabase Auth user y obtener JWT de Supabase
+    console.log("🔑 [AUTH CALLBACK] Upserting Supabase Auth user...")
+    let supabaseSession: { authId: string; accessToken: string; refreshToken: string }
+    try {
+      supabaseSession = await upsertSupabaseAuthUser(email, name ?? email, provider)
+      console.log("✅ [AUTH CALLBACK] Supabase session obtained, authId:", supabaseSession.authId)
+    } catch (supabaseError) {
+      console.error("❌ [AUTH CALLBACK] Failed to obtain Supabase session:", supabaseError)
+      await deleteSession()
+      const errorCode = ERROR_CODES.ERR_GEN_000.code
+      return NextResponse.json(
+        {
+          error: true,
+          message: ERROR_CODES.ERR_GEN_000.userMessage,
+          redirect: `/error?code=${errorCode}`,
+        },
+        { status: 500 }
       )
     }
 
@@ -128,7 +149,7 @@ export async function POST(request: NextRequest) {
     if (!dbUser) {
       // CASO: Usuario nuevo - necesita onboarding
       console.log("👤 [AUTH CALLBACK] New user detected, redirecting to onboarding")
-      
+
       await setTemporarySessionCookie({
         sub,
         email,
@@ -137,6 +158,9 @@ export async function POST(request: NextRequest) {
         provider,
         role: null,
         needsOnboarding: true,
+        supabaseAccessToken: supabaseSession.accessToken,
+        supabaseRefreshToken: supabaseSession.refreshToken,
+        authId: supabaseSession.authId,
       })
 
       return NextResponse.json(
@@ -157,7 +181,7 @@ export async function POST(request: NextRequest) {
     if (userRoles.length === 0) {
       // CASO: Usuario sin roles (no debería pasar, pero manejamos el caso)
       console.warn("⚠️ [AUTH CALLBACK] User has no roles, redirecting to onboarding")
-      
+
       await setTemporarySessionCookie({
         sub,
         email,
@@ -166,6 +190,9 @@ export async function POST(request: NextRequest) {
         provider,
         role: null,
         needsOnboarding: true,
+        supabaseAccessToken: supabaseSession.accessToken,
+        supabaseRefreshToken: supabaseSession.refreshToken,
+        authId: supabaseSession.authId,
       })
 
       return NextResponse.json(
@@ -186,6 +213,17 @@ export async function POST(request: NextRequest) {
 
       console.log("✅ [AUTH CALLBACK] Single role user, assigning role:", userRole)
 
+      // Backfill auth_id on glam_users if not set yet
+      if (!dbUser.auth_id) {
+        try {
+          const usersClient = getUsersClient()
+          await usersClient.updateUser(dbUser.id, { auth_id: supabaseSession.authId })
+          console.log("✅ [AUTH CALLBACK] Backfilled auth_id on glam_users")
+        } catch (err) {
+          console.warn("⚠️ [AUTH CALLBACK] Could not backfill auth_id:", err)
+        }
+      }
+
       await setSessionCookie({
         sub,
         email,
@@ -194,6 +232,9 @@ export async function POST(request: NextRequest) {
         provider,
         role: userRole,
         userId: dbUser.id,
+        supabaseAccessToken: supabaseSession.accessToken,
+        supabaseRefreshToken: supabaseSession.refreshToken,
+        authId: supabaseSession.authId,
       })
 
       return NextResponse.json(
@@ -215,7 +256,18 @@ export async function POST(request: NextRequest) {
 
     // CASO: Usuario con múltiples roles - necesita seleccionar
     console.log("👤 [AUTH CALLBACK] Multiple roles detected, redirecting to role selection")
-    
+
+    // Backfill auth_id on glam_users if not set yet
+    if (!dbUser.auth_id) {
+      try {
+        const usersClient = getUsersClient()
+        await usersClient.updateUser(dbUser.id, { auth_id: supabaseSession.authId })
+        console.log("✅ [AUTH CALLBACK] Backfilled auth_id on glam_users (multi-role)")
+      } catch (err) {
+        console.warn("⚠️ [AUTH CALLBACK] Could not backfill auth_id:", err)
+      }
+    }
+
     await setTemporarySessionCookie({
       sub,
       email,
@@ -225,6 +277,9 @@ export async function POST(request: NextRequest) {
       role: null,
       needsRoleSelection: true,
       availableRoles: userRoles,
+      supabaseAccessToken: supabaseSession.accessToken,
+      supabaseRefreshToken: supabaseSession.refreshToken,
+      authId: supabaseSession.authId,
     })
 
     return NextResponse.json(

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ROLE_DISPLAY_NAMES, type UserRole } from "@/lib/http/users/types"
+import { ROLE_DISPLAY_NAMES, type UserRole } from "@/lib/types/users"
 
 interface SelectRoleFormProps {
   availableRoles: string[]

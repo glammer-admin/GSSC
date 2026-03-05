@@ -20,7 +20,7 @@ import {
   ROLE_DISPLAY_NAMES, 
   AVAILABLE_ROLES_FOR_REGISTRATION,
   type UserRole 
-} from "@/lib/http/users/types"
+} from "@/lib/types/users"
 
 interface OnboardingFormProps {
   prefillData: {

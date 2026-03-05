@@ -4,6 +4,7 @@
  */
 
 import { HttpClient, HttpError, NetworkError } from "../client"
+import { getCompleteSession } from "@/lib/auth/session-manager"
 import type {
   BackendProject,
   CreateProjectDTO,
@@ -57,23 +58,31 @@ class ProjectClient {
   }
 
   /**
-   * Headers para peticiones GET
+   * Headers para peticiones GET — usa JWT de Supabase como Bearer (RLS-aware)
    */
-  private getReadHeaders(): Record<string, string> {
+  private async getReadHeaders(): Promise<Record<string, string>> {
+    const session = await getCompleteSession()
+    if (!session?.supabaseAccessToken) {
+      throw new Error("No valid session for project client")
+    }
     return {
       apikey: this.apiKey,
-      Authorization: `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${session.supabaseAccessToken}`,
       "Accept-Profile": this.dbSchema,
     }
   }
 
   /**
-   * Headers para peticiones POST/PUT/PATCH
+   * Headers para peticiones POST/PUT/PATCH — usa JWT de Supabase como Bearer
    */
-  private getWriteHeaders(): Record<string, string> {
+  private async getWriteHeaders(): Promise<Record<string, string>> {
+    const session = await getCompleteSession()
+    if (!session?.supabaseAccessToken) {
+      throw new Error("No valid session for project client")
+    }
     return {
       apikey: this.apiKey,
-      Authorization: `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${session.supabaseAccessToken}`,
       "Content-Profile": this.dbSchema,
       "Content-Type": "application/json",
       Prefer: "return=representation",
@@ -102,7 +111,7 @@ class ProjectClient {
             order: "last_sale_at.desc.nullslast",
             organizer_id: `eq.${organizerId}`,
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
       console.log(`✅ [PROJECT CLIENT] project_sales_summary: ${response?.length ?? 0} rows`)
@@ -135,7 +144,7 @@ class ProjectClient {
             project_public_code: `eq.${publicCode}`,
             organizer_id: `eq.${organizerId}`,
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -172,7 +181,7 @@ class ProjectClient {
             organizer_id: `eq.${organizerId}`,
             order: "created_at.desc",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -197,7 +206,7 @@ class ProjectClient {
         "/glam_projects",
         {
           params: { id: `eq.${projectId}` },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -227,7 +236,7 @@ class ProjectClient {
         "/glam_projects",
         {
           params: { public_code: `eq.${publicCode}` },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -256,7 +265,7 @@ class ProjectClient {
       const response = await this.client.post<BackendCreateResponse<BackendProject>>(
         "/glam_projects",
         data,
-        { headers: this.getWriteHeaders() }
+        { headers: await this.getWriteHeaders() }
       )
 
       if (!response || response.length === 0) {
@@ -286,7 +295,7 @@ class ProjectClient {
         data,
         {
           params: { id: `eq.${projectId}` },
-          headers: this.getWriteHeaders(),
+          headers: await this.getWriteHeaders(),
         }
       )
 
@@ -325,7 +334,7 @@ class ProjectClient {
         "/glam_projects",
         {
           params,
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 

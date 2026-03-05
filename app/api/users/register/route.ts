@@ -144,11 +144,21 @@ export async function POST(request: NextRequest) {
 
     // 6. Crear usuario en la base de datos
     console.log("📝 [REGISTER] Creating user in database...")
-    
+
     const usersClient = getUsersClient()
     const createdUser = await usersClient.createUser(createUserData)
 
     console.log("✅ [REGISTER] User created successfully:", createdUser.id)
+
+    // 6b. Patch auth_id en glam_users si el authId está disponible en la sesión temporal
+    if (session.authId) {
+      try {
+        await usersClient.updateUser(createdUser.id, { auth_id: session.authId })
+        console.log("✅ [REGISTER] auth_id patched on new glam_user")
+      } catch (err) {
+        console.warn("⚠️ [REGISTER] Could not patch auth_id:", err)
+      }
+    }
 
     // 7. Determinar siguiente paso según cantidad de roles
     if (formData.roles.length === 1) {
@@ -166,6 +176,9 @@ export async function POST(request: NextRequest) {
         provider: session.provider,
         role: userRole,
         userId: createdUser.id,
+        supabaseAccessToken: session.supabaseAccessToken ?? "",
+        supabaseRefreshToken: session.supabaseRefreshToken ?? "",
+        authId: session.authId ?? "",
       })
 
       return NextResponse.json(
@@ -195,6 +208,9 @@ export async function POST(request: NextRequest) {
       role: null,
       needsRoleSelection: true,
       availableRoles: formData.roles,
+      supabaseAccessToken: session.supabaseAccessToken,
+      supabaseRefreshToken: session.supabaseRefreshToken,
+      authId: session.authId,
     })
 
     return NextResponse.json(

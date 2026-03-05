@@ -4,6 +4,7 @@
  */
 
 import { HttpClient, HttpError, NetworkError } from "../client"
+import { getCompleteSession } from "@/lib/auth/session-manager"
 import type {
   BillingProfile,
   BankAccount,
@@ -58,23 +59,31 @@ class BillingClient {
   }
 
   /**
-   * Headers para peticiones GET
+   * Headers para peticiones GET — usa JWT de Supabase como Bearer (RLS-aware)
    */
-  private getReadHeaders(): Record<string, string> {
+  private async getReadHeaders(): Promise<Record<string, string>> {
+    const session = await getCompleteSession()
+    if (!session?.supabaseAccessToken) {
+      throw new Error("No valid session for billing client")
+    }
     return {
       apikey: this.apiKey,
-      Authorization: `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${session.supabaseAccessToken}`,
       "Accept-Profile": this.dbSchema,
     }
   }
 
   /**
-   * Headers para peticiones POST/PUT/PATCH
+   * Headers para peticiones POST/PUT/PATCH — usa JWT de Supabase como Bearer
    */
-  private getWriteHeaders(): Record<string, string> {
+  private async getWriteHeaders(): Promise<Record<string, string>> {
+    const session = await getCompleteSession()
+    if (!session?.supabaseAccessToken) {
+      throw new Error("No valid session for billing client")
+    }
     return {
       apikey: this.apiKey,
-      Authorization: `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${session.supabaseAccessToken}`,
       "Content-Profile": this.dbSchema,
       "Content-Type": "application/json",
       Prefer: "return=representation",
@@ -98,7 +107,7 @@ class BillingClient {
         "/billing_profiles",
         {
           params: { user_id: `eq.${userId}` },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -127,7 +136,7 @@ class BillingClient {
       const response = await this.client.post<BackendCreateResponse<BillingProfile>>(
         "/billing_profiles",
         data,
-        { headers: this.getWriteHeaders() }
+        { headers: await this.getWriteHeaders() }
       )
 
       if (!response || response.length === 0) {
@@ -157,7 +166,7 @@ class BillingClient {
         data,
         {
           params: { user_id: `eq.${userId}` },
-          headers: this.getWriteHeaders(),
+          headers: await this.getWriteHeaders(),
         }
       )
 
@@ -193,7 +202,7 @@ class BillingClient {
             user_id: `eq.${userId}`,
             order: "created_at.desc",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -221,7 +230,7 @@ class BillingClient {
             user_id: `eq.${userId}`,
             is_preferred: "eq.true",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -255,7 +264,7 @@ class BillingClient {
             is_active: "eq.true",
             order: "created_at.desc",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -284,7 +293,7 @@ class BillingClient {
             user_id: `eq.${userId}`,
             is_active: "eq.true",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -314,7 +323,7 @@ class BillingClient {
         "/bank_accounts",
         {
           params: { id: `eq.${accountId}` },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -343,7 +352,7 @@ class BillingClient {
       const response = await this.client.post<BackendCreateResponse<BankAccount>>(
         "/bank_accounts",
         data,
-        { headers: this.getWriteHeaders() }
+        { headers: await this.getWriteHeaders() }
       )
 
       if (!response || response.length === 0) {
@@ -373,7 +382,7 @@ class BillingClient {
         data,
         {
           params: { id: `eq.${accountId}` },
-          headers: this.getWriteHeaders(),
+          headers: await this.getWriteHeaders(),
         }
       )
 
@@ -452,7 +461,7 @@ class BillingClient {
             user_id: `eq.${userId}`,
             order: "created_at.desc",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -484,7 +493,7 @@ class BillingClient {
             user_id: `eq.${userId}`,
             document_type: `eq.${documentType}`,
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -508,7 +517,7 @@ class BillingClient {
       const response = await this.client.post<BackendCreateResponse<BillingDocument>>(
         "/billing_documents",
         data,
-        { headers: this.getWriteHeaders() }
+        { headers: await this.getWriteHeaders() }
       )
 
       if (!response || response.length === 0) {
@@ -539,7 +548,7 @@ class BillingClient {
       const response = await this.client.post<PaymentEligibilityResponse>(
         "/rpc/check_organizer_payment_eligibility",
         { p_user_id: userId },
-        { headers: this.getWriteHeaders() }
+        { headers: await this.getWriteHeaders() }
       )
 
       console.log(`✅ [BILLING CLIENT] Eligibility check complete: ${response?.eligible ? "eligible" : "not eligible"}`)

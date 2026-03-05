@@ -248,6 +248,9 @@ export async function middleware(request: NextRequest) {
     if (session.userId) {
       response.headers.set("X-User-Id", session.userId)
     }
+    if (session.authId) {
+      response.headers.set("X-Auth-Id", session.authId)
+    }
 
     // 11. Refrescar sesión si está próxima a expirar
     if (isSessionExpiringSoon(session)) {

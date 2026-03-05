@@ -4,6 +4,7 @@
  */
 
 import { HttpClient, HttpError, NetworkError } from "../client"
+import { getCompleteSession } from "@/lib/auth/session-manager"
 import type {
   BackendProduct,
   BackendProductCategory,
@@ -57,23 +58,31 @@ class ProductClient {
   }
 
   /**
-   * Headers para peticiones GET
+   * Headers para peticiones GET — usa JWT de Supabase como Bearer (RLS-aware)
    */
-  private getReadHeaders(): Record<string, string> {
+  private async getReadHeaders(): Promise<Record<string, string>> {
+    const session = await getCompleteSession()
+    if (!session?.supabaseAccessToken) {
+      throw new Error("No valid session for product client")
+    }
     return {
       apikey: this.apiKey,
-      Authorization: `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${session.supabaseAccessToken}`,
       "Accept-Profile": this.dbSchema,
     }
   }
 
   /**
-   * Headers para peticiones POST/PUT/PATCH
+   * Headers para peticiones POST/PUT/PATCH — usa JWT de Supabase como Bearer
    */
-  private getWriteHeaders(): Record<string, string> {
+  private async getWriteHeaders(): Promise<Record<string, string>> {
+    const session = await getCompleteSession()
+    if (!session?.supabaseAccessToken) {
+      throw new Error("No valid session for product client")
+    }
     return {
       apikey: this.apiKey,
-      Authorization: `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${session.supabaseAccessToken}`,
       "Content-Profile": this.dbSchema,
       "Content-Type": "application/json",
       Prefer: "return=representation",
@@ -98,7 +107,7 @@ class ProductClient {
           params: {
             order: "name.asc",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -123,7 +132,7 @@ class ProductClient {
         "/product_categories",
         {
           params: { code: `eq.${code}` },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -153,7 +162,7 @@ class ProductClient {
         "/product_categories",
         {
           params: { id: `eq.${id}` },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -191,7 +200,7 @@ class ProductClient {
             is_active: "eq.true",
             order: "name.asc",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -212,7 +221,7 @@ class ProductClient {
         "/glam_products",
         {
           params: { id: `eq.${id}` },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
       if (!response || response.length === 0) return null
@@ -241,7 +250,7 @@ class ProductClient {
           params: {
             order: "name.asc",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -273,7 +282,7 @@ class ProductClient {
             project_id: `eq.${projectId}`,
             order: "created_at.desc",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -298,7 +307,7 @@ class ProductClient {
         "/project_products",
         {
           params: { id: `eq.${productId}` },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -327,7 +336,7 @@ class ProductClient {
       const response = await this.client.post<BackendCreateResponse<BackendProduct>>(
         "/project_products",
         data,
-        { headers: this.getWriteHeaders() }
+        { headers: await this.getWriteHeaders() }
       )
 
       if (!response || response.length === 0) {
@@ -357,7 +366,7 @@ class ProductClient {
         data,
         {
           params: { id: `eq.${productId}` },
-          headers: this.getWriteHeaders(),
+          headers: await this.getWriteHeaders(),
         }
       )
 
@@ -393,7 +402,7 @@ class ProductClient {
             product_id: `eq.${productId}`,
             order: "position.asc",
           },
-          headers: this.getReadHeaders(),
+          headers: await this.getReadHeaders(),
         }
       )
 
@@ -417,7 +426,7 @@ class ProductClient {
       const response = await this.client.post<BackendCreateResponse<BackendProductImage>>(
         "/product_images",
         data,
-        { headers: this.getWriteHeaders() }
+        { headers: await this.getWriteHeaders() }
       )
 
       if (!response || response.length === 0) {
@@ -447,7 +456,7 @@ class ProductClient {
         data,
         {
           params: { id: `eq.${imageId}` },
-          headers: this.getWriteHeaders(),
+          headers: await this.getWriteHeaders(),
         }
       )
 
@@ -476,7 +485,7 @@ class ProductClient {
         "/product_images",
         {
           params: { id: `eq.${imageId}` },
-          headers: this.getWriteHeaders(),
+          headers: await this.getWriteHeaders(),
         }
       )
 
