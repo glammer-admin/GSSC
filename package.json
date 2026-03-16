@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev-portless": "portless run next dev",
     "dev:staging": "cross-env NODE_ENV=production NEXT_PUBLIC_APP_ENV=staging next dev",
     "build": "next build",
     "build:staging": "cross-env NEXT_PUBLIC_APP_ENV=staging next build",
