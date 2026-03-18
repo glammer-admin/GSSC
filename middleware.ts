@@ -9,6 +9,7 @@ import {
   type AnySessionData,
   type SessionRole,
 } from "@/lib/auth/session-manager"
+import { getConfig } from "@/lib/config/env"
 
 // Rutas que NO requieren autenticación (pero pueden redirigir si ya hay sesión)
 const PUBLIC_ROUTES = [
@@ -262,8 +263,15 @@ export async function middleware(request: NextRequest) {
     console.error("Middleware error:", error)
 
     // En caso de error, eliminar cookie y redirigir
+    const config = getConfig()
     const response = NextResponse.redirect(new URL("/", request.url))
     response.cookies.delete(SESSION_COOKIE_NAME)
+    response.cookies.set(SESSION_COOKIE_NAME, "", {
+      maxAge: 0,
+      path: "/",
+      expires: new Date(0),
+      domain: config.cookieDomain,
+    })
     return response
   }
 }

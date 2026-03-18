@@ -171,7 +171,8 @@ export async function setSessionCookie(sessionData: Omit<SessionData, "iat" | "e
     secure: config.secureCookies,
     sameSite: "lax",
     maxAge: config.sessionDuration,
-    path: "/"
+    path: "/",
+    domain: config.cookieDomain,
   })
 
   cookieStore.set(SESSION_COOKIE_NAME, token, {
@@ -180,6 +181,7 @@ export async function setSessionCookie(sessionData: Omit<SessionData, "iat" | "e
     sameSite: "lax", // Protección CSRF
     maxAge: config.sessionDuration, // Duración basada en ambiente
     path: "/", // Disponible en toda la app
+    domain: config.cookieDomain, // Dominio basado en ambiente
   })
   
   console.log("✅ [SESSION] Cookie set successfully")
@@ -209,8 +211,9 @@ export async function setTemporarySessionCookie(
     sameSite: "lax",
     maxAge: config.sessionDuration,
     path: "/",
+    domain: config.cookieDomain,
   })
-  
+
   console.log("✅ [SESSION] Temporary cookie set successfully")
 }
 
@@ -306,6 +309,7 @@ export async function deleteSession(): Promise<void> {
     maxAge: 0, // Expira inmediatamente
     path: "/",
     expires: new Date(0), // Fecha en el pasado
+    domain: config.cookieDomain,
   })
 }
 

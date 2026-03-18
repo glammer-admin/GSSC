@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { MoreVertical, Pencil } from "lucide-react"
+import { MoreVertical, Pencil, ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -13,6 +13,11 @@ import {
 interface ProductKebabMenuProps {
   projectId: string
   productId: string
+}
+
+function getGlamForgeUrl(projectId: string, productId: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_GLAMFORGE_URL || "https://glamforge.glam-urban.com"
+  return `${baseUrl}?projectId=${projectId}&productId=${productId}`
 }
 
 export function ProductKebabMenu({ projectId, productId }: ProductKebabMenuProps) {
@@ -34,6 +39,16 @@ export function ProductKebabMenu({ projectId, productId }: ProductKebabMenuProps
             <Pencil className="h-4 w-4" />
             Editar
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a
+            href={getGlamForgeUrl(projectId, productId)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ImageIcon className="h-4 w-4" />
+            Imágenes
+          </a>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

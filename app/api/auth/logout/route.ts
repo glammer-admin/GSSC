@@ -44,13 +44,15 @@ export async function POST(request: NextRequest) {
       maxAge: 0,
       path: "/",
       expires: new Date(0),
+      domain: config.cookieDomain,
     })
-    
+
     // 5. Método 3: Expirar sin flags (máxima compatibilidad)
     response.cookies.set(SESSION_COOKIE_NAME, "", {
       maxAge: 0,
       path: "/",
       expires: new Date(0),
+      domain: config.cookieDomain,
     })
 
     // 6. Agregar headers de seguridad adicionales
@@ -72,11 +74,13 @@ export async function POST(request: NextRequest) {
     )
     
     // Intentar eliminar con múltiples métodos
+    const config = getConfig()
     errorResponse.cookies.delete(SESSION_COOKIE_NAME)
     errorResponse.cookies.set(SESSION_COOKIE_NAME, "", {
       maxAge: 0,
       path: "/",
       expires: new Date(0),
+      domain: config.cookieDomain,
     })
     
     return errorResponse
@@ -110,13 +114,15 @@ export async function GET(request: NextRequest) {
       maxAge: 0,
       path: "/",
       expires: new Date(0),
+      domain: config.cookieDomain,
     })
-    
+
     // Método 3: Expirar sin flags (compatibilidad)
     response.cookies.set(SESSION_COOKIE_NAME, "", {
       maxAge: 0,
       path: "/",
       expires: new Date(0),
+      domain: config.cookieDomain,
     })
 
     // Headers de limpieza
@@ -129,12 +135,14 @@ export async function GET(request: NextRequest) {
     console.error("❌ [LOGOUT GET] Error:", error)
     
     // Redirigir de todas formas
+    const config = getConfig()
     const response = NextResponse.redirect(new URL("/", request.url))
     response.cookies.delete(SESSION_COOKIE_NAME)
     response.cookies.set(SESSION_COOKIE_NAME, "", {
       maxAge: 0,
       path: "/",
       expires: new Date(0),
+      domain: config.cookieDomain,
     })
     
     return response
