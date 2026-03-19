@@ -45,8 +45,9 @@ export const envConfig = {
     useRealSSO: false,
     sessionDuration: 24 * 60 * 60, // 24 horas
     logLevel: "debug",
-    apiUrl: "http://localhost:3000",
+    apiUrl: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000/",
     secureCookies: false,
+    cookieDomain: process.env.COOKIE_DOMAIN || ".glam-urban.dev",
   },
   staging: {
     useRealSSO: true,
@@ -54,6 +55,7 @@ export const envConfig = {
     logLevel: "info",
     apiUrl: process.env.NEXT_PUBLIC_STAGING_URL || "https://stagin-gssc.glam-urban.com/",
     secureCookies: true,
+    cookieDomain: process.env.COOKIE_DOMAIN || ".glam-urban.com",
   },
   production: {
     useRealSSO: true,
@@ -61,6 +63,7 @@ export const envConfig = {
     logLevel: "error",
     apiUrl: process.env.NEXT_PUBLIC_PRODUCTION_URL || "https://gssc.glam-urban.com/",
     secureCookies: true,
+    cookieDomain: process.env.COOKIE_DOMAIN || ".glam-urban.com",
   },
 }
 

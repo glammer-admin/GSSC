@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ['gssc-authn'],
   typescript: {
     ignoreBuildErrors: true,
   },
