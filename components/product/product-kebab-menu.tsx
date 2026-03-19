@@ -43,8 +43,6 @@ export function ProductKebabMenu({ projectId, productId }: ProductKebabMenuProps
         <DropdownMenuItem asChild>
           <a
             href={getGlamForgeUrl(projectId, productId)}
-            target="_blank"
-            rel="noopener noreferrer"
           >
             <ImageIcon className="h-4 w-4" />
             Imágenes
