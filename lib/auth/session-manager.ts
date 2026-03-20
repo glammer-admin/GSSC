@@ -1,4 +1,4 @@
-import { SignJWT } from "jose"
+import { SignJWT, decodeJwt } from "jose"
 import { cookies } from "next/headers"
 import { getConfig, isDevelopment } from "@/lib/config/env"
 
@@ -198,6 +198,71 @@ export async function deleteSession(): Promise<void> {
     expires: new Date(0),
     domain: config.cookieDomain,
   })
+}
+
+// Margen de seguridad: refrescar el Supabase token si expira en menos de 5 minutos
+const SUPABASE_TOKEN_REFRESH_MARGIN = 5 * 60 // 5 minutos en segundos
+
+/**
+ * Verifica si un Supabase access token está expirado o próximo a expirar.
+ * Decodifica el JWT sin verificar firma (solo necesitamos el campo exp).
+ */
+function isSupabaseTokenExpiringSoon(token: string): boolean {
+  try {
+    const payload = decodeJwt(token)
+    if (!payload.exp) return true // sin exp → asumir expirado
+    const now = Math.floor(Date.now() / 1000)
+    return payload.exp - now < SUPABASE_TOKEN_REFRESH_MARGIN
+  } catch {
+    return true // token inválido → forzar refresh
+  }
+}
+
+/**
+ * Obtiene un Supabase access token válido, refrescándolo si está expirado.
+ * Esta es la función que deben usar todos los HTTP clients para obtener el Bearer token.
+ * Si el token está vigente, lo retorna directamente (sin I/O extra).
+ * Si está expirado o por expirar, lo renueva, actualiza la cookie de sesión, y retorna el nuevo.
+ */
+export async function getValidSupabaseToken(): Promise<string> {
+  const { getCompleteSession: getComplete } = await import("@glam-urban/gssc-authn")
+  const session = await getComplete()
+
+  if (!session?.supabaseAccessToken) {
+    throw new Error("No valid session with Supabase token")
+  }
+
+  // Token todavía vigente → retornar tal cual
+  if (!isSupabaseTokenExpiringSoon(session.supabaseAccessToken)) {
+    return session.supabaseAccessToken
+  }
+
+  // Token expirado o por expirar → refrescar
+  if (!session.supabaseRefreshToken) {
+    throw new Error("Supabase access token expired and no refresh token available")
+  }
+
+  console.log("🔄 [SESSION] Supabase token expired/expiring, refreshing...")
+
+  const { refreshSupabaseToken } = await import("@/lib/auth/supabase-admin")
+  const renewed = await refreshSupabaseToken(session.supabaseRefreshToken)
+
+  // Persistir los nuevos tokens en la cookie de sesión
+  await setSessionCookie({
+    sub: session.sub,
+    email: session.email,
+    name: session.name,
+    picture: session.picture,
+    provider: session.provider,
+    role: session.role,
+    userId: session.userId,
+    supabaseAccessToken: renewed.accessToken,
+    supabaseRefreshToken: renewed.refreshToken,
+    authId: session.authId,
+  })
+
+  console.log("✅ [SESSION] Supabase token refreshed successfully")
+  return renewed.accessToken
 }
 
 /**

@@ -17,16 +17,12 @@ interface ProductsPageProps {
   params: Promise<{ id: string }>
 }
 
-async function getProjectWithProducts(idOrPublicCode: string, userId: string) {
+async function getProjectWithProducts(projectId: string, userId: string) {
   try {
     const projectClient = getProjectClient()
     const productClient = getProductClient()
-    
-    let backendProject = await projectClient.getProjectByPublicCode(idOrPublicCode)
-    
-    if (!backendProject) {
-      backendProject = await projectClient.getProjectById(idOrPublicCode)
-    }
+
+    const backendProject = await projectClient.getProjectById(projectId)
     
     if (!backendProject) {
       return null
@@ -150,7 +146,6 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
           <ProjectHeader
             name={project.name}
             status={project.status}
-            publicCode={project.publicCode}
           />
 
           <div className="flex flex-col lg:flex-row gap-8">

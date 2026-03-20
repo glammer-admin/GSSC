@@ -1,22 +1,19 @@
 import { Badge } from "@/components/ui/badge"
-import { Copy, Check } from "lucide-react"
 import { PROJECT_STATUS_CONFIG, type ProjectStatus } from "@/lib/types/project/types"
 
 interface ProjectHeaderProps {
   name: string
   status: ProjectStatus
-  publicCode: string
 }
 
 /**
- * Header del proyecto mostrando nombre, estado y código público
- * 
+ * Header del proyecto mostrando nombre y estado
+ *
  * Server Component que:
  * - Muestra el nombre del proyecto
  * - Muestra el estado con badge de color
- * - Muestra el código público (solo lectura)
  */
-export function ProjectHeader({ name, status, publicCode }: ProjectHeaderProps) {
+export function ProjectHeader({ name, status }: ProjectHeaderProps) {
   const statusConfig = PROJECT_STATUS_CONFIG[status]
 
   return (
@@ -40,14 +37,6 @@ export function ProjectHeader({ name, status, publicCode }: ProjectHeaderProps) 
         >
           {statusConfig.label}
         </Badge>
-      </div>
-
-      {/* Código público */}
-      <div className="mt-2 flex items-center gap-2 text-muted-foreground">
-        <span className="text-sm">Código del proyecto:</span>
-        <code className="px-2 py-0.5 bg-muted rounded text-sm font-mono">
-          {publicCode}
-        </code>
       </div>
     </div>
   )

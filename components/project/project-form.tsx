@@ -63,7 +63,7 @@ interface FormErrors {
  * Formulario principal de creación/edición de proyecto
  * 
  * Client Component que maneja:
- * - Información básica (incluye publicCode en edición)
+ * - Información básica
  * - Comisión
  * - Packaging
  * - Modo de entrega (selección única)
@@ -388,7 +388,6 @@ export function ProjectForm({ project }: ProjectFormProps) {
               description={description}
               logoUrl={logoUrl}
               logoFile={logoFile}
-              publicCode={project?.publicCode}
               isEditMode={isEditMode}
               disabled={isSubmitting}
               errors={{

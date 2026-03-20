@@ -20,17 +20,13 @@ interface EditProductPageProps {
   params: Promise<{ id: string; productId: string }>
 }
 
-async function getProductData(idOrPublicCode: string, productId: string, userId: string) {
+async function getProductData(projectId: string, productId: string, userId: string) {
   try {
     const projectClient = getProjectClient()
     const productClient = getProductClient()
     const storageClient = getProductStorageClient()
-    
-    let backendProject = await projectClient.getProjectByPublicCode(idOrPublicCode)
-    
-    if (!backendProject) {
-      backendProject = await projectClient.getProjectById(idOrPublicCode)
-    }
+
+    const backendProject = await projectClient.getProjectById(projectId)
     
     if (!backendProject) {
       return null

@@ -10,7 +10,7 @@ export interface ProjectMenuItem {
   id: string
   icon: LucideIcon
   label: string
-  /** Ruta relativa al proyecto (se construye como /project/{publicCode}{href}) */
+  /** Ruta relativa al proyecto (se construye como /project/{id}{href}) */
   href: string
   visible: boolean
   description?: string

@@ -2,7 +2,6 @@
   "projects": [
     {
       "id": "proj-001",
-      "publicCode": "proj-001",
       "name": "Campaña Navidad 2024",
       "status": "active",
       "metrics": {
@@ -15,7 +14,6 @@
     },
     {
       "id": "proj-002",
-      "publicCode": "proj-002",
       "name": "Festival de Verano",
       "status": "active",
       "metrics": {
@@ -28,7 +26,6 @@
     },
     {
       "id": "proj-003",
-      "publicCode": "proj-003",
       "name": "Black Friday 2024",
       "status": "finished",
       "metrics": {
@@ -41,7 +38,6 @@
     },
     {
       "id": "proj-004",
-      "publicCode": "proj-004",
       "name": "Colección Primavera",
       "status": "paused",
       "metrics": {
@@ -54,7 +50,6 @@
     },
     {
       "id": "proj-005",
-      "publicCode": "proj-005",
       "name": "Día de la Madre 2024",
       "status": "finished",
       "metrics": {
@@ -67,7 +62,6 @@
     },
     {
       "id": "proj-006",
-      "publicCode": "proj-006",
       "name": "Cyber Monday 2024",
       "status": "active",
       "metrics": {
@@ -80,4 +74,3 @@
     }
   ]
 }
-

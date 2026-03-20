@@ -4,7 +4,7 @@
  */
 
 import { HttpClient, HttpError, NetworkError } from "../client"
-import { getCompleteSession } from "@/lib/auth/session-manager"
+import { getValidSupabaseToken } from "@/lib/auth/session-manager"
 import type {
   BackendProduct,
   BackendProductCategory,
@@ -61,13 +61,10 @@ class ProductClient {
    * Headers para peticiones GET — usa JWT de Supabase como Bearer (RLS-aware)
    */
   private async getReadHeaders(): Promise<Record<string, string>> {
-    const session = await getCompleteSession()
-    if (!session?.supabaseAccessToken) {
-      throw new Error("No valid session for product client")
-    }
+    const token = await getValidSupabaseToken()
     return {
       apikey: this.apiKey,
-      Authorization: `Bearer ${session.supabaseAccessToken}`,
+      Authorization: `Bearer ${token}`,
       "Accept-Profile": this.dbSchema,
     }
   }
@@ -76,13 +73,10 @@ class ProductClient {
    * Headers para peticiones POST/PUT/PATCH — usa JWT de Supabase como Bearer
    */
   private async getWriteHeaders(): Promise<Record<string, string>> {
-    const session = await getCompleteSession()
-    if (!session?.supabaseAccessToken) {
-      throw new Error("No valid session for product client")
-    }
+    const token = await getValidSupabaseToken()
     return {
       apikey: this.apiKey,
-      Authorization: `Bearer ${session.supabaseAccessToken}`,
+      Authorization: `Bearer ${token}`,
       "Content-Profile": this.dbSchema,
       "Content-Type": "application/json",
       Prefer: "return=representation",
