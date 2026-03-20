@@ -29,7 +29,7 @@ export type BackendUpdateResponse<T> = T[]
  * Solo ventas confirmadas (paid). Fuente: specs/sells/sells-curl-example.md
  */
 export interface ProjectSalesSummaryRow {
-  project_public_code: string
+  project_id: string
   project_name: string
   project_status: string
   orders_count: number

@@ -79,7 +79,6 @@ export type DeliveryConfig = OrganizerLocationConfig | CustomerHomeConfig | null
  */
 export interface BackendProject {
   id: string
-  public_code: string
   organizer_id: string
   name: string
   description?: string
@@ -100,7 +99,6 @@ export interface BackendProject {
  */
 export interface Project {
   id: string
-  publicCode: string
   organizerId: string
   name: string
   description?: string
@@ -444,7 +442,6 @@ export function canActivateProject(project: Partial<CreateProjectInput>): { vali
 export function toProject(backend: BackendProject, logoUrl?: string): Project {
   return {
     id: backend.id,
-    publicCode: backend.public_code,
     organizerId: backend.organizer_id,
     name: backend.name,
     description: backend.description,

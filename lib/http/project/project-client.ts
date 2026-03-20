@@ -4,7 +4,7 @@
  */
 
 import { HttpClient, HttpError, NetworkError } from "../client"
-import { getCompleteSession } from "@/lib/auth/session-manager"
+import { getValidSupabaseToken } from "@/lib/auth/session-manager"
 import type {
   BackendProject,
   CreateProjectDTO,
@@ -61,13 +61,10 @@ class ProjectClient {
    * Headers para peticiones GET — usa JWT de Supabase como Bearer (RLS-aware)
    */
   private async getReadHeaders(): Promise<Record<string, string>> {
-    const session = await getCompleteSession()
-    if (!session?.supabaseAccessToken) {
-      throw new Error("No valid session for project client")
-    }
+    const token = await getValidSupabaseToken()
     return {
       apikey: this.apiKey,
-      Authorization: `Bearer ${session.supabaseAccessToken}`,
+      Authorization: `Bearer ${token}`,
       "Accept-Profile": this.dbSchema,
     }
   }
@@ -76,13 +73,10 @@ class ProjectClient {
    * Headers para peticiones POST/PUT/PATCH — usa JWT de Supabase como Bearer
    */
   private async getWriteHeaders(): Promise<Record<string, string>> {
-    const session = await getCompleteSession()
-    if (!session?.supabaseAccessToken) {
-      throw new Error("No valid session for project client")
-    }
+    const token = await getValidSupabaseToken()
     return {
       apikey: this.apiKey,
-      Authorization: `Bearer ${session.supabaseAccessToken}`,
+      Authorization: `Bearer ${token}`,
       "Content-Profile": this.dbSchema,
       "Content-Type": "application/json",
       Prefer: "return=representation",
@@ -102,7 +96,7 @@ class ProjectClient {
   async getProjectSalesSummary(organizerId: string): Promise<ProjectSalesSummaryRow[]> {
     try {
       const select =
-        "project_public_code,project_name,project_status,orders_count,units_sold,organizer_commission_total,currency,last_sale_at"
+        "project_id,project_name,project_status,orders_count,units_sold,organizer_commission_total,currency,last_sale_at"
       const response = await this.client.get<ProjectSalesSummaryRow[]>(
         "/project_sales_summary",
         {
@@ -123,25 +117,25 @@ class ProjectClient {
   }
 
   /**
-   * Obtiene el resumen de ventas de un proyecto específico por código público.
-   * @param publicCode - Código público del proyecto (formato PRJ-XXXXX)
+   * Obtiene el resumen de ventas de un proyecto específico por ID.
+   * @param projectId - ID del proyecto (UUID)
    * @param organizerId - ID del organizador para validación
    * @returns Fila de project_sales_summary o null si no existe/no es del organizador
    */
-  async getProjectSalesSummaryByPublicCode(
-    publicCode: string,
+  async getProjectSalesSummaryById(
+    projectId: string,
     organizerId: string
   ): Promise<ProjectSalesSummaryRow | null> {
     try {
-      console.log(`🔍 [PROJECT CLIENT] Getting sales summary for project: ${publicCode}`)
+      console.log(`🔍 [PROJECT CLIENT] Getting sales summary for project: ${projectId}`)
       const select =
-        "project_public_code,project_name,project_status,orders_count,units_sold,organizer_commission_total,currency,last_sale_at"
+        "project_id,project_name,project_status,orders_count,units_sold,organizer_commission_total,currency,last_sale_at"
       const response = await this.client.get<ProjectSalesSummaryRow[]>(
         "/project_sales_summary",
         {
           params: {
             select,
-            project_public_code: `eq.${publicCode}`,
+            project_id: `eq.${projectId}`,
             organizer_id: `eq.${organizerId}`,
           },
           headers: await this.getReadHeaders(),
@@ -149,14 +143,14 @@ class ProjectClient {
       )
 
       if (!response || response.length === 0) {
-        console.log(`ℹ️ [PROJECT CLIENT] Sales summary not found for project: ${publicCode}`)
+        console.log(`ℹ️ [PROJECT CLIENT] Sales summary not found for project: ${projectId}`)
         return null
       }
 
-      console.log(`✅ [PROJECT CLIENT] Sales summary found for project: ${publicCode}`)
+      console.log(`✅ [PROJECT CLIENT] Sales summary found for project: ${projectId}`)
       return response[0]
     } catch (error) {
-      this.handleError("getProjectSalesSummaryByPublicCode", error)
+      this.handleError("getProjectSalesSummaryById", error)
       throw error
     }
   }
@@ -219,36 +213,6 @@ class ProjectClient {
       return response[0]
     } catch (error) {
       this.handleError("getProjectById", error)
-      throw error
-    }
-  }
-
-  /**
-   * Obtiene un proyecto por código público
-   * @param publicCode - Código público del proyecto (formato PRJ-XXXXX)
-   * @returns Proyecto o null si no existe
-   */
-  async getProjectByPublicCode(publicCode: string): Promise<BackendProject | null> {
-    try {
-      console.log(`🔍 [PROJECT CLIENT] Getting project by public_code: ${publicCode}`)
-      
-      const response = await this.client.get<BackendArrayResponse<BackendProject>>(
-        "/glam_projects",
-        {
-          params: { public_code: `eq.${publicCode}` },
-          headers: await this.getReadHeaders(),
-        }
-      )
-
-      if (!response || response.length === 0) {
-        console.log(`ℹ️ [PROJECT CLIENT] Project not found by public_code: ${publicCode}`)
-        return null
-      }
-
-      console.log(`✅ [PROJECT CLIENT] Project found by public_code: ${publicCode}`)
-      return response[0]
-    } catch (error) {
-      this.handleError("getProjectByPublicCode", error)
       throw error
     }
   }
@@ -390,7 +354,7 @@ function mapBackendStatusToProjectStatus(status: string): ProjectStatus {
 
 /**
  * Mapea una fila de project_sales_summary al tipo Project del dashboard.
- * Usa project_public_code como id y publicCode para la URL de detalle.
+ * Usa project_id como id para la URL de detalle.
  */
 export function mapProjectSalesSummaryRowToProject(row: ProjectSalesSummaryRow): Project {
   const status = mapBackendStatusToProjectStatus(row.project_status)
@@ -403,8 +367,7 @@ export function mapProjectSalesSummaryRowToProject(row: ProjectSalesSummaryRow):
     commission: Number(row.organizer_commission_total) || 0,
   }
   return {
-    id: row.project_public_code,
-    publicCode: row.project_public_code,
+    id: row.project_id,
     name: row.project_name,
     status,
     metrics,

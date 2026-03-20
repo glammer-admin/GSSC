@@ -12,18 +12,13 @@ interface EditProjectPageProps {
 }
 
 /**
- * Obtiene el proyecto desde el backend (por ID o public_code)
+ * Obtiene el proyecto desde el backend por ID
  */
-async function getProject(idOrPublicCode: string, userId: string) {
+async function getProject(projectId: string, userId: string) {
   try {
     const projectClient = getProjectClient()
-    
-    // Intentar primero por public_code, luego por ID
-    let backendProject = await projectClient.getProjectByPublicCode(idOrPublicCode)
-    
-    if (!backendProject) {
-      backendProject = await projectClient.getProjectById(idOrPublicCode)
-    }
+
+    const backendProject = await projectClient.getProjectById(projectId)
     
     if (!backendProject) {
       return null
@@ -85,7 +80,7 @@ export async function generateMetadata({ params }: EditProjectPageProps) {
  * Server Component que:
  * - Valida sesión del usuario
  * - Verifica rol organizador
- * - Carga el proyecto por ID o public_code desde el backend
+ * - Carga el proyecto por ID desde el backend
  * - Verifica propiedad del proyecto (RN-01)
  * - Reutiliza la UI de edición con nombre solo lectura (RN-03)
  * - Los cambios se registran en el modelo de auditoría (RN-04)
@@ -133,7 +128,6 @@ export default async function EditProjectPage({ params }: EditProjectPageProps) 
           <ProjectHeader
             name={project.name}
             status={project.status}
-            publicCode={project.publicCode}
           />
 
           {/* Layout con sidebar */}

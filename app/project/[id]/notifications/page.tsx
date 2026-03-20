@@ -14,18 +14,13 @@ interface NotificationsPageProps {
 }
 
 /**
- * Obtiene el proyecto por ID o por public_code y valida propiedad
+ * Obtiene el proyecto por ID y valida propiedad
  */
-async function getProjectData(idOrPublicCode: string, userId: string) {
+async function getProjectData(projectId: string, userId: string) {
   try {
     const projectClient = getProjectClient()
 
-    // Intentar primero por public_code, luego por ID
-    let backendProject = await projectClient.getProjectByPublicCode(idOrPublicCode)
-
-    if (!backendProject) {
-      backendProject = await projectClient.getProjectById(idOrPublicCode)
-    }
+    const backendProject = await projectClient.getProjectById(projectId)
 
     if (!backendProject) {
       return null
@@ -131,7 +126,6 @@ export default async function NotificationsPage({
           <ProjectHeader
             name={project.name}
             status={project.status}
-            publicCode={project.publicCode}
           />
 
           {/* Layout con sidebar */}

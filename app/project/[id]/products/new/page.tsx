@@ -16,17 +16,12 @@ interface NewProductPageProps {
 /**
  * Obtiene el proyecto y los catálogos necesarios
  */
-async function getProjectAndCatalogs(idOrPublicCode: string, userId: string) {
+async function getProjectAndCatalogs(projectId: string, userId: string) {
   try {
     const projectClient = getProjectClient()
     const productClient = getProductClient()
-    
-    // Intentar primero por public_code, luego por ID
-    let backendProject = await projectClient.getProjectByPublicCode(idOrPublicCode)
-    
-    if (!backendProject) {
-      backendProject = await projectClient.getProjectById(idOrPublicCode)
-    }
+
+    const backendProject = await projectClient.getProjectById(projectId)
     
     if (!backendProject) {
       return null

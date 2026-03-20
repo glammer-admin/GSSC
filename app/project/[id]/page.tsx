@@ -12,10 +12,10 @@ interface ProjectDashboardPageProps {
 }
 
 /**
- * Obtiene el proyecto por ID o por public_code y valida propiedad
+ * Obtiene el proyecto por ID y valida propiedad
  */
 async function getProjectWithMetrics(
-  idOrPublicCode: string,
+  projectId: string,
   userId: string
 ): Promise<{
   project: Project
@@ -30,13 +30,7 @@ async function getProjectWithMetrics(
   try {
     const projectClient = getProjectClient()
 
-    // Intentar primero por public_code (formato PRJ-XXXXX), luego por ID
-    let backendProject = await projectClient.getProjectByPublicCode(idOrPublicCode)
-
-    if (!backendProject) {
-      // Si no encuentra por public_code, intentar por ID
-      backendProject = await projectClient.getProjectById(idOrPublicCode)
-    }
+    const backendProject = await projectClient.getProjectById(projectId)
 
     if (!backendProject) {
       return null
@@ -67,8 +61,8 @@ async function getProjectWithMetrics(
     const project = toProject(backendProject, logoUrl)
 
     // Obtener métricas de ventas
-    const salesSummary = await projectClient.getProjectSalesSummaryByPublicCode(
-      project.publicCode,
+    const salesSummary = await projectClient.getProjectSalesSummaryById(
+      project.id,
       userId
     )
 
@@ -167,7 +161,6 @@ export default async function ProjectDashboardPage({
           <ProjectHeader
             name={project.name}
             status={project.status}
-            publicCode={project.publicCode}
           />
 
           {/* Layout con sidebar */}

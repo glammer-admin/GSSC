@@ -67,7 +67,7 @@ interface FormErrors {
  */
 export function ProjectConfigForm({ project, returnUrl }: ProjectConfigFormProps) {
   const router = useRouter()
-  const defaultReturnUrl = returnUrl || `/project/${project.publicCode}`
+  const defaultReturnUrl = returnUrl || `/project/${project.id}`
   
   // Estado del formulario
   const [projectType, setProjectType] = useState<ProjectType | undefined>(project.projectType)
@@ -322,16 +322,6 @@ export function ProjectConfigForm({ project, returnUrl }: ProjectConfigFormProps
               <p className="text-xs text-muted-foreground">
                 El nombre del proyecto no puede ser modificado después de su creación
               </p>
-            </div>
-
-            {/* Código público (solo lectura) */}
-            <div className="space-y-2">
-              <Label>Código público</Label>
-              <Input
-                value={project.publicCode}
-                disabled
-                className="bg-muted font-mono"
-              />
             </div>
 
             {/* Tipo de proyecto (solo lectura por ahora) */}
