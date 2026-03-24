@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { 
-  getSession, 
-  refreshSession, 
-  isSessionExpiringSoon, 
+import {
+  getSession,
+  refreshSession,
+  isSessionExpiringSoon,
   SESSION_COOKIE_NAME,
   isTemporarySession,
   isCompleteSession,
+  getValidSupabaseToken,
   type AnySessionData,
   type SessionRole,
 } from "@/lib/auth/session-manager"
@@ -256,6 +257,13 @@ export async function middleware(request: NextRequest) {
     // 11. Refrescar sesión si está próxima a expirar
     if (isSessionExpiringSoon(session)) {
       await refreshSession()
+    }
+
+    // 12. Para sesiones completas, verificar que el Supabase access token esté vigente.
+    // Si expiró y no puede refrescarse, lanzará un error que el catch capturará,
+    // eliminando la cookie y redirigiendo al login en lugar de mostrar la página sin datos.
+    if (isCompleteSession(session)) {
+      await getValidSupabaseToken()
     }
 
     return response

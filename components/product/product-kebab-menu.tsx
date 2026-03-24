@@ -17,7 +17,7 @@ interface ProductKebabMenuProps {
 
 function getGlamForgeUrl(projectId: string, productId: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_GLAMFORGE_URL || "https://glamforge.glam-urban.com"
-  return `${baseUrl}?projectId=${projectId}&productId=${productId}`
+  return `${baseUrl}?projectId=${projectId}&productId=${productId}&project_product_id=${productId}`
 }
 
 export function ProductKebabMenu({ projectId, productId }: ProductKebabMenuProps) {
