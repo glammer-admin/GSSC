@@ -3,10 +3,10 @@ import {
   getSession,
   refreshSession,
   isSessionExpiringSoon,
+  isSupabaseTokenExpiringSoon,
   SESSION_COOKIE_NAME,
   isTemporarySession,
   isCompleteSession,
-  getValidSupabaseToken,
   type AnySessionData,
   type SessionRole,
 } from "@/lib/auth/session-manager"
@@ -254,16 +254,56 @@ export async function middleware(request: NextRequest) {
       response.headers.set("X-Auth-Id", session.authId)
     }
 
-    // 11. Refrescar sesión si está próxima a expirar
-    if (isSessionExpiringSoon(session)) {
-      await refreshSession()
-    }
-
-    // 12. Para sesiones completas, verificar que el Supabase access token esté vigente.
-    // Si expiró y no puede refrescarse, lanzará un error que el catch capturará,
-    // eliminando la cookie y redirigiendo al login en lugar de mostrar la página sin datos.
+    // 11. Refrescar sesión BFF si está próxima a expirar,
+    //     y/o renovar el Supabase token si está por expirar.
+    //     Persistimos el token actualizado en response.cookies (no cookies().set())
+    //     porque el middleware no puede usar cookies() para escritura.
     if (isCompleteSession(session)) {
-      await getValidSupabaseToken()
+      const needsSessionRefresh = isSessionExpiringSoon(session)
+      const needsSupabaseRefresh = isSupabaseTokenExpiringSoon(session.supabaseAccessToken)
+
+      if (needsSessionRefresh || needsSupabaseRefresh) {
+        let supabaseAccessToken = session.supabaseAccessToken
+        let supabaseRefreshToken = session.supabaseRefreshToken
+
+        // Renovar Supabase token si es necesario
+        if (needsSupabaseRefresh && session.supabaseRefreshToken) {
+          const { refreshSupabaseToken } = await import("@/lib/auth/supabase-admin")
+          const renewed = await refreshSupabaseToken(session.supabaseRefreshToken)
+          supabaseAccessToken = renewed.accessToken
+          supabaseRefreshToken = renewed.refreshToken
+          console.log("✅ [MIDDLEWARE] Supabase token renewed")
+        }
+
+        // Crear nuevo JWT de sesión con tokens actualizados
+        const { createSessionToken } = await import("@/lib/auth/session-manager")
+        const newToken = await createSessionToken({
+          sub: session.sub,
+          email: session.email,
+          name: session.name,
+          picture: session.picture,
+          provider: session.provider,
+          role: session.role,
+          userId: session.userId,
+          supabaseAccessToken,
+          supabaseRefreshToken,
+          authId: session.authId,
+        })
+
+        const config = getConfig()
+        response.cookies.set(SESSION_COOKIE_NAME, newToken, {
+          httpOnly: true,
+          secure: config.secureCookies,
+          sameSite: "lax",
+          maxAge: config.sessionDuration,
+          path: "/",
+          domain: config.cookieDomain,
+        })
+        console.log("✅ [MIDDLEWARE] Session cookie refreshed")
+      }
+    } else if (isSessionExpiringSoon(session)) {
+      // Sesión temporal próxima a expirar — solo extender duración
+      await refreshSession()
     }
 
     return response

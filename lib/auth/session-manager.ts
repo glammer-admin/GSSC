@@ -207,7 +207,7 @@ const SUPABASE_TOKEN_REFRESH_MARGIN = 5 * 60 // 5 minutos en segundos
  * Verifica si un Supabase access token está expirado o próximo a expirar.
  * Decodifica el JWT sin verificar firma (solo necesitamos el campo exp).
  */
-function isSupabaseTokenExpiringSoon(token: string): boolean {
+export function isSupabaseTokenExpiringSoon(token: string): boolean {
   try {
     const payload = decodeJwt(token)
     if (!payload.exp) return true // sin exp → asumir expirado
@@ -222,7 +222,11 @@ function isSupabaseTokenExpiringSoon(token: string): boolean {
  * Obtiene un Supabase access token válido, refrescándolo si está expirado.
  * Esta es la función que deben usar todos los HTTP clients para obtener el Bearer token.
  * Si el token está vigente, lo retorna directamente (sin I/O extra).
- * Si está expirado o por expirar, lo renueva, actualiza la cookie de sesión, y retorna el nuevo.
+ * Si está expirado o por expirar, lo renueva y retorna el nuevo token.
+ *
+ * NOTA: No persiste el token renovado en la cookie porque esta función se llama
+ * desde Server Components (donde cookies().set() está prohibido). La persistencia
+ * se hace en el middleware vía refreshSession() + response.cookies.
  */
 export async function getValidSupabaseToken(): Promise<string> {
   const { getCompleteSession: getComplete } = await import("@glam-urban/gssc-authn")
@@ -246,20 +250,6 @@ export async function getValidSupabaseToken(): Promise<string> {
 
   const { refreshSupabaseToken } = await import("@/lib/auth/supabase-admin")
   const renewed = await refreshSupabaseToken(session.supabaseRefreshToken)
-
-  // Persistir los nuevos tokens en la cookie de sesión
-  await setSessionCookie({
-    sub: session.sub,
-    email: session.email,
-    name: session.name,
-    picture: session.picture,
-    provider: session.provider,
-    role: session.role,
-    userId: session.userId,
-    supabaseAccessToken: renewed.accessToken,
-    supabaseRefreshToken: renewed.refreshToken,
-    authId: session.authId,
-  })
 
   console.log("✅ [SESSION] Supabase token refreshed successfully")
   return renewed.accessToken
