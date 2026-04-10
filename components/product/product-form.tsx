@@ -201,8 +201,8 @@ export function ProductForm({
 
   const handleGlamProductSelect = useCallback((gp: GlamProduct) => {
     setGlamProductId(gp.id)
-    setName(gp.name)
-    setDescription(gp.description ?? "")
+    setName((prev) => prev.trim() ? prev : gp.name)
+    setDescription((prev) => prev.trim() ? prev : (gp.description ?? ""))
     setBasePrice(gp.basePrice)
     setSelectedAttributes({})
     if (selectedCategory) {

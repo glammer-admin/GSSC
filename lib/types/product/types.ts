@@ -23,7 +23,7 @@ export type VisualMode = "upload_images" | "online_editor" | "designer_assisted"
 /**
  * Código de módulo de personalización (RN-02)
  */
-export type PersonalizationModuleCode = "sizes" | "numbers" | "names" | "age_categories"
+export type PersonalizationModuleCode = "numbers" | "names" | "age_categories"
 
 /**
  * Origen de imagen de producto (RN-20)
@@ -33,15 +33,6 @@ export type ProductImageSource = "upload" | "online_editor" | "designer_assisted
 // ============================================
 // CONFIGURACIÓN DE PERSONALIZACIÓN
 // ============================================
-
-/**
- * Configuración del módulo de tallas
- */
-export interface SizesConfig {
-  enabled: boolean
-  options: string[]
-  price_modifier: number // Siempre 0 en MVP (RN-11)
-}
 
 /**
  * Configuración del módulo de números
@@ -76,7 +67,6 @@ export interface AgeCategoriesConfig {
  * Inmutable después de activar el producto (RN-13)
  */
 export interface PersonalizationConfig {
-  sizes?: SizesConfig
   numbers?: NumbersConfig
   names?: NamesConfig
   age_categories?: AgeCategoriesConfig
@@ -487,10 +477,6 @@ export const VISUAL_MODES = [
  * Módulos de personalización con labels
  */
 export const PERSONALIZATION_MODULES_CONFIG = {
-  sizes: {
-    label: "Selección de talla",
-    description: "Permite al comprador elegir talla",
-  },
   numbers: {
     label: "Número deportivo",
     description: "Permite agregar número en la espalda (1-99)",
@@ -504,11 +490,6 @@ export const PERSONALIZATION_MODULES_CONFIG = {
     description: "Permite seleccionar categoría (infantil, juvenil, adulto)",
   },
 } as const
-
-/**
- * Opciones de talla por defecto
- */
-export const DEFAULT_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL"] as const
 
 /**
  * Opciones de categoría de edad por defecto
@@ -856,14 +837,8 @@ export function createEmptyPersonalizationConfig(): PersonalizationConfig {
  */
 export function createDefaultModuleConfig(
   moduleCode: PersonalizationModuleCode
-): SizesConfig | NumbersConfig | NamesConfig | AgeCategoriesConfig {
+): NumbersConfig | NamesConfig | AgeCategoriesConfig {
   switch (moduleCode) {
-    case "sizes":
-      return {
-        enabled: true,
-        options: [...DEFAULT_SIZE_OPTIONS],
-        price_modifier: 0,
-      }
     case "numbers":
       return {
         enabled: true,
@@ -897,7 +872,7 @@ export function buildDefaultPersonalizationConfig(
   const config: PersonalizationConfig = {}
   for (const moduleCode of allowedModules) {
     const defaultConfig = createDefaultModuleConfig(moduleCode)
-    config[moduleCode] = { ...defaultConfig, enabled: false } as typeof defaultConfig
+    ;(config as Record<string, unknown>)[moduleCode] = { ...defaultConfig, enabled: false }
   }
   return config
 }
@@ -914,7 +889,7 @@ export function ensureAllModulesPresent(
   for (const moduleCode of allowedModules) {
     if (!result[moduleCode]) {
       const defaultConfig = createDefaultModuleConfig(moduleCode)
-      result[moduleCode] = { ...defaultConfig, enabled: false } as typeof defaultConfig
+      ;(result as Record<string, unknown>)[moduleCode] = { ...defaultConfig, enabled: false }
     }
   }
   return result

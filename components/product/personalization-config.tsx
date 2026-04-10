@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   PERSONALIZATION_MODULES_CONFIG,
-  DEFAULT_SIZE_OPTIONS,
   DEFAULT_AGE_CATEGORY_OPTIONS,
   DEFAULT_NUMBERS_CONFIG,
   DEFAULT_NAMES_CONFIG,
@@ -19,7 +18,6 @@ import type {
   PersonalizationModule,
   PersonalizationConfig as PersonalizationConfigType,
   PersonalizationModuleCode,
-  SizesConfig,
   NumbersConfig,
   NamesConfig,
   AgeCategoriesConfig,
@@ -56,34 +54,15 @@ export function PersonalizationConfig({
     
     if (enabled) {
       // Crear configuración por defecto para el módulo
-      newConfig[moduleCode] = createDefaultModuleConfig(moduleCode) as SizesConfig & NumbersConfig & NamesConfig & AgeCategoriesConfig
+      newConfig[moduleCode] = createDefaultModuleConfig(moduleCode) as NumbersConfig & NamesConfig & AgeCategoriesConfig
     } else {
       // Deshabilitar módulo
       if (newConfig[moduleCode]) {
-        newConfig[moduleCode] = { ...newConfig[moduleCode], enabled: false } as SizesConfig & NumbersConfig & NamesConfig & AgeCategoriesConfig
+        newConfig[moduleCode] = { ...newConfig[moduleCode], enabled: false } as NumbersConfig & NamesConfig & AgeCategoriesConfig
       }
     }
     
     onChange(newConfig)
-  }, [config, onChange])
-
-  const handleSizeOptionToggle = useCallback((option: string, checked: boolean) => {
-    const sizesConfig = config.sizes as SizesConfig | undefined
-    const currentOptions = sizesConfig?.options || []
-    
-    const newOptions = checked
-      ? [...currentOptions, option]
-      : currentOptions.filter(o => o !== option)
-    
-    onChange({
-      ...config,
-      sizes: {
-        ...sizesConfig,
-        enabled: true,
-        options: newOptions,
-        price_modifier: 0,
-      },
-    })
   }, [config, onChange])
 
   const handleAgeCategoryToggle = useCallback((option: string, checked: boolean) => {
@@ -172,35 +151,6 @@ export function PersonalizationConfig({
             {/* Configuración específica del módulo */}
             {isEnabled && (
               <div className="pt-4 border-t">
-                {/* Configuración de tallas */}
-                {module.code === "sizes" && (
-                  <div className="space-y-3">
-                    <Label className="text-sm">Tallas disponibles:</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {DEFAULT_SIZE_OPTIONS.map((size) => {
-                        const sizesConfig = config.sizes as SizesConfig | undefined
-                        const isSelected = sizesConfig?.options?.includes(size) ?? false
-                        
-                        return (
-                          <div key={size} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`size-${size}`}
-                              checked={isSelected}
-                              onCheckedChange={(checked) => 
-                                handleSizeOptionToggle(size, checked as boolean)
-                              }
-                              disabled={disabled}
-                            />
-                            <Label htmlFor={`size-${size}`} className="text-sm cursor-pointer">
-                              {size}
-                            </Label>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 {/* Configuración de números */}
                 {module.code === "numbers" && (
                   <div className="space-y-3">
