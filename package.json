@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3000",
     "dev-portless": "portless run next dev",
     "dev:staging": "cross-env NODE_ENV=production NEXT_PUBLIC_APP_ENV=staging next dev",
     "build": "next build",
