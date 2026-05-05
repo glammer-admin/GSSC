@@ -202,7 +202,7 @@ function getProcessingPage(code: string, state: string): string {
         statusEl.textContent = '¡Autenticación exitosa! Redirigiendo...';
         
         setTimeout(() => {
-          window.location.href = authData.redirect || '/customer-dash';
+          window.location.href = authData.redirect || '/';
         }, 500);
 
       } catch (error) {

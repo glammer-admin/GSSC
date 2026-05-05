@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { getSession, isTemporarySession } from "@/lib/auth/session-manager"
 import { OnboardingForm } from "@/components/onboarding-form"
+import { AVAILABLE_REGISTRATION_ROLES } from "@/lib/types/users"
 
 /**
  * Página de onboarding para nuevos usuarios
@@ -24,6 +25,9 @@ export default async function OnboardingPage() {
     name: session.name || "",
     email: session.email,
   }
+
+  // Roles disponibles en GSSC. El rol admin (supplier) se gestiona en gssc-management.
+  const availableRoles = [...AVAILABLE_REGISTRATION_ROLES]
 
   return (
     <main className="min-h-screen bg-background">
@@ -54,7 +58,7 @@ export default async function OnboardingPage() {
       {/* Formulario */}
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="bg-card rounded-xl border border-border shadow-lg p-6 md:p-8">
-          <OnboardingForm prefillData={prefillData} />
+          <OnboardingForm prefillData={prefillData} availableRoles={availableRoles} />
         </div>
 
         {/* Footer */}

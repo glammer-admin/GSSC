@@ -1,24 +1,27 @@
 import { NextRequest, NextResponse } from "next/server"
-import { 
-  getSession, 
+import {
+  getSession,
   updateSessionWithRole,
   isTemporarySession,
 } from "@/lib/auth/session-manager"
-import { 
-  ROLE_DASHBOARD_MAP,
-  type UserRole 
+import {
+  getRoleRedirectUrl,
+  isUserRole,
+  type UserRole,
 } from "@/lib/http/users/types"
 import { getUsersClient } from "@/lib/http/users/users-client"
 
 /**
  * POST /api/auth/set-role
- * Endpoint para seleccionar rol cuando el usuario tiene múltiples roles
+ * Endpoint para seleccionar rol cuando el usuario tiene múltiples roles.
+ * Solo acepta roles válidos de GSSC (buyer/organizer). El rol admin (supplier)
+ * se gestiona en gssc-management y no es seleccionable desde esta app.
  */
 export async function POST(request: NextRequest) {
   try {
     // 1. Obtener sesión actual
     const session = await getSession()
-    
+
     if (!session) {
       console.error("❌ [SET ROLE] No session found")
       return NextResponse.json(
@@ -51,7 +54,16 @@ export async function POST(request: NextRequest) {
     console.log("🔄 [SET ROLE] Role selection request:", role)
     console.log("🔄 [SET ROLE] Available roles:", session.availableRoles)
 
-    // 4. Validar que el rol esté en los roles disponibles
+    // 4. Validar que el rol sea válido en GSSC (no acepta supplier).
+    if (!isUserRole(role)) {
+      console.error("❌ [SET ROLE] Role not allowed in GSSC:", role)
+      return NextResponse.json(
+        { error: "Invalid role", message: "Rol no disponible en esta plataforma." },
+        { status: 403 }
+      )
+    }
+
+    // 5. Validar que el rol esté en los roles disponibles de la sesión.
     if (!session.availableRoles?.includes(role)) {
       console.error("❌ [SET ROLE] Role not in available roles:", role)
       return NextResponse.json(
@@ -60,15 +72,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 5. Validar que el rol sea válido en el sistema
-    const validRoles: UserRole[] = ["buyer", "organizer", "supplier"]
-    if (!validRoles.includes(role as UserRole)) {
-      console.error("❌ [SET ROLE] Invalid system role:", role)
-      return NextResponse.json(
-        { error: "Invalid role", message: "Rol no válido" },
-        { status: 400 }
-      )
-    }
+    const userRole: UserRole = role
 
     // 6. Obtener userId de la BD
     let userId: string | undefined
@@ -80,16 +84,14 @@ export async function POST(request: NextRequest) {
       console.warn("⚠️ [SET ROLE] Could not fetch user ID:", error)
     }
 
-    // 7. Obtener URL de redirección
-    const userRole = role as UserRole
-    const redirectUrl = ROLE_DASHBOARD_MAP[userRole]
+    // 7. URL de redirección según rol.
+    const redirectUrl = getRoleRedirectUrl(userRole)
 
     console.log("✅ [SET ROLE] Updating session with role:", userRole)
 
     // 8. Actualizar sesión con el rol seleccionado
     await updateSessionWithRole(session, userRole, userId)
 
-    // 9. Retornar respuesta exitosa
     return NextResponse.json(
       {
         success: true,
@@ -101,13 +103,12 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error("❌ [SET ROLE] Error:", error)
-    
+
     const errorMessage = error instanceof Error ? error.message : "Failed to set role"
-    
+
     return NextResponse.json(
       { error: "Failed to set role", message: errorMessage },
       { status: 500 }
     )
   }
 }
-

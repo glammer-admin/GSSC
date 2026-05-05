@@ -9,7 +9,10 @@ import {
 import { upsertSupabaseAuthUser } from "@/lib/auth/supabase-admin"
 import { getUsersClient } from "@/lib/http/users/users-client"
 import {
-  ROLE_DASHBOARD_MAP,
+  getRoleRedirectUrl,
+  getManagementUrl,
+  isAdminDomain,
+  toGsscRoles,
   type UserRole
 } from "@/lib/http/users/types"
 import { HttpError, NetworkError } from "@/lib/http/client"
@@ -174,9 +177,82 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Usuario existe en BD
-    const userRoles = dbUser.role
-    console.log("👤 [AUTH CALLBACK] Existing user found with roles:", userRoles)
+    // Usuario existe en BD.
+    // El rol `supplier` (administrador) pertenece a gssc-management, no a esta app.
+    // Si el usuario tiene ese rol y un email @glam-urban.com → redirigir al portal admin.
+    // Para cualquier otro caso, filtramos `supplier` y seguimos con los roles válidos de GSSC.
+    const dbRoles: string[] = Array.isArray(dbUser.role) ? dbUser.role : []
+    const hasSupplierRole = dbRoles.includes("supplier")
+
+    if (hasSupplierRole && isAdminDomain(email)) {
+      console.log("👤 [AUTH CALLBACK] Admin role detected for @glam-urban user, redirecting to management portal")
+      const mgmtUrl = getManagementUrl()
+      if (!mgmtUrl) {
+        await deleteSession()
+        const errorCode = ERROR_CODES.ERR_GEN_000.code
+        console.error(formatErrorLog(errorCode, "MANAGEMENT_URL no configurada"))
+        return NextResponse.json(
+          {
+            error: true,
+            message: "Portal de administración no disponible.",
+            redirect: `/error?code=${errorCode}`,
+          },
+          { status: 500 }
+        )
+      }
+
+      if (!dbUser.auth_id) {
+        try {
+          const usersClient = getUsersClient()
+          await usersClient.updateUser(dbUser.id, { auth_id: supabaseSession.authId })
+          console.log("✅ [AUTH CALLBACK] Backfilled auth_id on glam_users (supplier)")
+        } catch (err) {
+          console.warn("⚠️ [AUTH CALLBACK] Could not backfill auth_id:", err)
+        }
+      }
+
+      // Persistir la cookie con role=supplier en el dominio compartido (.glam-urban.dev)
+      // para que gssc-management la lea con el mismo SESSION_SECRET.
+      await setSessionCookie({
+        sub,
+        email,
+        name,
+        picture,
+        provider,
+        role: "supplier",
+        userId: dbUser.id,
+        supabaseAccessToken: supabaseSession.accessToken,
+        supabaseRefreshToken: supabaseSession.refreshToken,
+        authId: supabaseSession.authId,
+      })
+
+      return NextResponse.json(
+        {
+          success: true,
+          user: { sub, email, name, picture, role: "supplier", userId: dbUser.id },
+          redirect: mgmtUrl,
+        },
+        { status: 200 }
+      )
+    }
+
+    const userRoles = toGsscRoles(dbRoles)
+    console.log("👤 [AUTH CALLBACK] Existing user found, db roles:", dbRoles, "effective GSSC roles:", userRoles)
+
+    if (dbRoles.length > 0 && userRoles.length === 0) {
+      // Edge: usuario tenía solo `supplier` en DB pero su email no es @glam-urban.com.
+      // No tiene ningún rol válido para GSSC y no es admin interno. Cerrar sesión.
+      console.error("❌ [AUTH CALLBACK] User has no valid roles for this domain", { email, dbRoles })
+      await deleteSession()
+      return NextResponse.json(
+        {
+          error: true,
+          message: "Tu cuenta no tiene un rol válido para esta plataforma.",
+          redirect: "/error?code=AUTH_VAL_001",
+        },
+        { status: 403 }
+      )
+    }
 
     if (userRoles.length === 0) {
       // CASO: Usuario sin roles (no debería pasar, pero manejamos el caso)
@@ -208,8 +284,8 @@ export async function POST(request: NextRequest) {
 
     if (userRoles.length === 1) {
       // CASO: Usuario con un solo rol - acceso directo
-      const userRole = userRoles[0] as UserRole
-      const redirectUrl = ROLE_DASHBOARD_MAP[userRole]
+      const userRole = userRoles[0]
+      const redirectUrl = getRoleRedirectUrl(userRole)
 
       console.log("✅ [AUTH CALLBACK] Single role user, assigning role:", userRole)
 

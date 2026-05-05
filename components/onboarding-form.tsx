@@ -16,10 +16,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { 
-  ROLE_DISPLAY_NAMES, 
-  AVAILABLE_ROLES_FOR_REGISTRATION,
-  type UserRole 
+import {
+  ROLE_DISPLAY_NAMES,
+  type UserRole
 } from "@/lib/types/users"
 
 interface OnboardingFormProps {
@@ -27,6 +26,7 @@ interface OnboardingFormProps {
     name: string
     email: string
   }
+  availableRoles: UserRole[]
 }
 
 interface FormData {
@@ -50,7 +50,7 @@ interface FormErrors {
   roles?: string
 }
 
-export function OnboardingForm({ prefillData }: OnboardingFormProps) {
+export function OnboardingForm({ prefillData, availableRoles }: OnboardingFormProps) {
   const router = useRouter()
   
   const [formData, setFormData] = useState<FormData>({
@@ -383,7 +383,7 @@ export function OnboardingForm({ prefillData }: OnboardingFormProps) {
         </p>
 
         <div className="space-y-3">
-          {AVAILABLE_ROLES_FOR_REGISTRATION.map((role) => {
+          {availableRoles.map((role) => {
             const isSelected = formData.roles.includes(role)
             
             return (

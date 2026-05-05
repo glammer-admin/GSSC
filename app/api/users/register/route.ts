@@ -6,9 +6,9 @@ import {
   isTemporarySession,
 } from "@/lib/auth/session-manager"
 import { getUsersClient } from "@/lib/http/users/users-client"
-import { 
-  ROLE_DASHBOARD_MAP,
-  AVAILABLE_ROLES_FOR_REGISTRATION,
+import {
+  getRoleRedirectUrl,
+  AVAILABLE_REGISTRATION_ROLES,
   type UserRole,
   type CreateUserDTO,
   type DeliveryAddress,
@@ -27,7 +27,10 @@ interface RegisterFormData {
 /**
  * Valida los datos del formulario de registro
  */
-function validateFormData(data: RegisterFormData): { valid: boolean; errors: string[] } {
+function validateFormData(
+  data: RegisterFormData,
+  allowedRoles: readonly UserRole[]
+): { valid: boolean; errors: string[] } {
   const errors: string[] = []
 
   // Validar nombre
@@ -63,9 +66,9 @@ function validateFormData(data: RegisterFormData): { valid: boolean; errors: str
   if (!data.roles || data.roles.length === 0) {
     errors.push("Debe seleccionar al menos un rol")
   } else {
-    // Verificar que los roles sean válidos para registro
+    // Verificar que los roles sean válidos para este usuario (según dominio del email)
     const invalidRoles = data.roles.filter(
-      role => !AVAILABLE_ROLES_FOR_REGISTRATION.includes(role)
+      role => !allowedRoles.includes(role)
     )
     if (invalidRoles.length > 0) {
       errors.push(`Roles no válidos para registro: ${invalidRoles.join(", ")}`)
@@ -116,8 +119,10 @@ export async function POST(request: NextRequest) {
     console.log("📝 [REGISTER] Registration request for:", session.email)
     console.log("📝 [REGISTER] Form data:", { ...formData, email: session.email })
 
-    // 4. Validar datos del formulario
-    const validation = validateFormData(formData)
+    // 4. Validar datos del formulario.
+    //    Solo se aceptan roles válidos de GSSC (buyer/organizer). El rol admin
+    //    (supplier) se gestiona desde gssc-management.
+    const validation = validateFormData(formData, AVAILABLE_REGISTRATION_ROLES)
     if (!validation.valid) {
       console.error("❌ [REGISTER] Validation errors:", validation.errors)
       return NextResponse.json(
@@ -164,7 +169,7 @@ export async function POST(request: NextRequest) {
     if (formData.roles.length === 1) {
       // Usuario con un solo rol - crear sesión completa
       const userRole = formData.roles[0]
-      const redirectUrl = ROLE_DASHBOARD_MAP[userRole]
+      const redirectUrl = getRoleRedirectUrl(userRole)
 
       console.log("✅ [REGISTER] Single role, creating complete session:", userRole)
 

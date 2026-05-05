@@ -1,35 +1,5 @@
 {
   "roles": {
-    "Proveedor": {
-      "name": "Proveedor",
-      "defaultRoute": "/customer-dash",
-      "menu": [
-        {
-          "id": "dashboard",
-          "icon": "Home",
-          "label": "Dashboard",
-          "href": "/customer-dash"
-        },
-        {
-          "id": "proyectos",
-          "icon": "FileText",
-          "label": "Proyectos",
-          "href": "/customer-dash/projects"
-        },
-        {
-          "id": "clientes",
-          "icon": "Users",
-          "label": "Clientes",
-          "href": "/customer-dash/clients"
-        },
-        {
-          "id": "calendario",
-          "icon": "Calendar",
-          "label": "Calendario",
-          "href": "/customer-dash/calendar"
-        }
-      ]
-    },
     "Organizador": {
       "name": "Organizador",
       "defaultRoute": "/dashboard",
@@ -68,4 +38,3 @@
     }
   }
 }
-

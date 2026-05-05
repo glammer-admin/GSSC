@@ -29,10 +29,7 @@ export default async function SettingsLayout({
 
   // Verificar rol organizer
   if (session.role !== "organizer") {
-    // Redirigir al dashboard correcto según el rol
-    if (session.role === "supplier") {
-      redirect("/customer-dash")
-    } else if (session.role === "buyer") {
+    if (session.role === "buyer") {
       redirect("/product/1234asdf")
     }
     redirect("/")

@@ -17,13 +17,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }
   
   // Verificar rol
-  if (session.role !== "Pagador") {
-    // Redirigir al dashboard correcto según el rol
-    if (session.role === "Organizador") {
+  if (session.role !== "buyer") {
+    if (session.role === "organizer") {
       redirect("/dashboard")
-    } else if (session.role === "Proveedor") {
-      redirect("/customer-dash")
     }
+    redirect("/")
   }
 
   return (

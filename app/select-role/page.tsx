@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { getSession, isTemporarySession } from "@/lib/auth/session-manager"
 import { SelectRoleForm } from "@/components/select-role-form"
+import { toGsscRoles } from "@/lib/types/users"
 
 /**
  * Página de selección de rol
@@ -19,7 +20,14 @@ export default async function SelectRolePage() {
     redirect("/")
   }
 
-  const availableRoles = session.availableRoles || []
+  // Filtro defensivo: solo dejamos roles válidos de GSSC (buyer/organizer).
+  // Sesiones legadas pueden traer "supplier" que ya no existe en esta app.
+  const availableRoles = toGsscRoles(session.availableRoles || [])
+
+  if (availableRoles.length === 0) {
+    redirect("/")
+  }
+
   const userName = session.name || session.email
 
   return (

@@ -24,8 +24,8 @@ const mockUsers = {
   },
   microsoft: {
     sub: "mock_microsoft_67890",
-    email: "proveedor@example.com",
-    name: "María Proveedora",
+    email: "organizador.ms@example.com",
+    name: "María Organizadora",
     picture: "https://api.dicebear.com/7.x/avataaars/svg?seed=microsoft",
     email_verified: true,
   },

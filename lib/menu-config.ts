@@ -1,11 +1,8 @@
 import {
   Home,
-  FileText,
-  Users,
-  Settings,
-  Calendar,
   DollarSign,
   History,
+  Settings,
   type LucideIcon,
 } from "lucide-react"
 
@@ -22,38 +19,9 @@ export interface MenuConfig {
 }
 
 // Configuración de menús por rol
-// Roles: buyer (Comprador), organizer (Organizador), supplier (Proveedor)
+// Roles: buyer (Comprador), organizer (Organizador)
+// El rol admin (supplier) vive en gssc-management, no en esta app.
 export const menuConfig: MenuConfig = {
-  supplier: [
-    {
-      id: "dashboard",
-      icon: Home,
-      label: "Dashboard",
-      href: "/customer-dash",
-      roles: ["supplier"],
-    },
-    {
-      id: "proyectos",
-      icon: FileText,
-      label: "Proyectos",
-      href: "/customer-dash/projects",
-      roles: ["supplier"],
-    },
-    {
-      id: "clientes",
-      icon: Users,
-      label: "Clientes",
-      href: "/customer-dash/clients",
-      roles: ["supplier"],
-    },
-    {
-      id: "calendario",
-      icon: Calendar,
-      label: "Calendario",
-      href: "/customer-dash/calendar",
-      roles: ["supplier"],
-    },
-  ],
   organizer: [
     {
       id: "dashboard",
@@ -112,4 +80,3 @@ export function getDefaultRouteByRole(role?: string): string {
   }
   return "/"
 }
-

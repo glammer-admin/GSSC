@@ -39,23 +39,24 @@ const TEMPORARY_API_ROUTES = [
   "/api/users/register",
 ]
 
-// Rutas por rol (sesión completa)
-const ROLE_ROUTES: Record<SessionRole, string[]> = {
+// Rutas por rol (sesión completa). El rol `supplier` (admin) no tiene rutas en GSSC:
+// se redirige al portal gssc-management. Cualquier sesión con ese rol que llegue acá
+// es legacy y se cierra al inicio del middleware.
+const ROLE_ROUTES: Partial<Record<SessionRole, string[]>> = {
   organizer: ["/dashboard", "/settings", "/project", "/api/settings", "/api/project", "/api/product"],
-  supplier: ["/customer-dash"],
   buyer: ["/product"],
 }
 
 /**
- * Obtiene la ruta por defecto para un rol
+ * Obtiene la ruta por defecto para un rol soportado en GSSC.
+ * `supplier` no debería llegar acá (se intercepta antes con redirect a MANAGEMENT_URL).
  */
 function getDefaultRouteForRole(role: SessionRole): string {
-  const routes: Record<SessionRole, string> = {
+  const routes: Partial<Record<SessionRole, string>> = {
     organizer: "/dashboard",
-    supplier: "/customer-dash",
     buyer: "/product/1234asdf",
   }
-  return routes[role]
+  return routes[role] ?? "/"
 }
 
 /**
@@ -63,6 +64,7 @@ function getDefaultRouteForRole(role: SessionRole): string {
  */
 function checkRoleAccess(role: SessionRole, pathname: string): boolean {
   const allowedRoutes = ROLE_ROUTES[role]
+  if (!allowedRoutes) return false
   return allowedRoutes.some((route) => pathname.startsWith(route))
 }
 
@@ -105,6 +107,18 @@ export async function middleware(request: NextRequest) {
   try {
     // 3. Obtener y validar la sesión
     const session = await getSession()
+
+    // 3b. Rol admin (supplier): GSSC no atiende ese rol. Redirigimos al portal
+    //     gssc-management SIN borrar la cookie — el portal la comparte vía
+    //     domain=.glam-urban.dev y la verifica con el mismo SESSION_SECRET.
+    if (session && isCompleteSession(session) && session.role === "supplier") {
+      console.log("🔄 [MIDDLEWARE] Sesión con rol admin detectada, redirigiendo a gssc-management")
+      const mgmtUrl = process.env.MANAGEMENT_URL
+      const target = mgmtUrl && mgmtUrl.length > 0
+        ? mgmtUrl
+        : new URL("/", request.url).toString()
+      return NextResponse.redirect(target)
+    }
 
     // 4. CASO ESPECIAL: Página de login (/)
     if (pathname === "/") {
