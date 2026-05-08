@@ -376,6 +376,21 @@ class ProductClient {
     }
   }
 
+  async deleteProduct(productId: string): Promise<boolean> {
+    try {
+      console.log(`🗑️ [PRODUCT CLIENT] Deleting product: ${productId}`)
+      await this.client.delete("/project_products", {
+        params: { id: `eq.${productId}` },
+        headers: await this.getWriteHeaders(),
+      })
+      console.log(`✅ [PRODUCT CLIENT] Product deleted: ${productId}`)
+      return true
+    } catch (error) {
+      this.handleError("deleteProduct", error)
+      throw error
+    }
+  }
+
   // ============================================================
   // IMÁGENES DE PRODUCTOS
   // ============================================================

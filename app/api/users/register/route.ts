@@ -8,7 +8,10 @@ import {
 import { getUsersClient } from "@/lib/http/users/users-client"
 import {
   getRoleRedirectUrl,
-  AVAILABLE_REGISTRATION_ROLES,
+  getRegistrationRolesForEmail,
+  getManagementUrl,
+  isAdminDomain,
+  type RegistrationRole,
   type UserRole,
   type CreateUserDTO,
   type DeliveryAddress,
@@ -21,7 +24,7 @@ interface RegisterFormData {
   name: string
   phone_number: string
   delivery_address: DeliveryAddress
-  roles: UserRole[]
+  roles: RegistrationRole[]
 }
 
 /**
@@ -29,7 +32,7 @@ interface RegisterFormData {
  */
 function validateFormData(
   data: RegisterFormData,
-  allowedRoles: readonly UserRole[]
+  allowedRoles: readonly RegistrationRole[]
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = []
 
@@ -120,9 +123,12 @@ export async function POST(request: NextRequest) {
     console.log("📝 [REGISTER] Form data:", { ...formData, email: session.email })
 
     // 4. Validar datos del formulario.
-    //    Solo se aceptan roles válidos de GSSC (buyer/organizer). El rol admin
-    //    (supplier) se gestiona desde gssc-management.
-    const validation = validateFormData(formData, AVAILABLE_REGISTRATION_ROLES)
+    //    Los roles permitidos dependen del dominio del email de la sesión:
+    //    - Cualquier dominio: buyer/organizer.
+    //    - @glam-urban.com: además, supplier (Administrador) que dirige al portal de management.
+    //    Derivamos el dominio EXCLUSIVAMENTE de la sesión SSO (nunca del payload).
+    const allowedRoles = getRegistrationRolesForEmail(session.email)
+    const validation = validateFormData(formData, allowedRoles)
     if (!validation.valid) {
       console.error("❌ [REGISTER] Validation errors:", validation.errors)
       return NextResponse.json(
@@ -168,7 +174,64 @@ export async function POST(request: NextRequest) {
     // 7. Determinar siguiente paso según cantidad de roles
     if (formData.roles.length === 1) {
       // Usuario con un solo rol - crear sesión completa
-      const userRole = formData.roles[0]
+      const selectedRole = formData.roles[0]
+
+      // Caso especial: supplier (Administrador). Solo es válido si el email pertenece
+      // al dominio admin (la validación previa ya lo asegura, pero defendemos a fondo).
+      if (selectedRole === "supplier") {
+        if (!isAdminDomain(session.email)) {
+          console.error("❌ [REGISTER] supplier role for non-admin domain")
+          return NextResponse.json(
+            { error: "Validation failed", errors: ["Rol no permitido para este dominio"] },
+            { status: 403 }
+          )
+        }
+
+        const mgmtUrl = getManagementUrl()
+        if (!mgmtUrl) {
+          const errorCode = ERROR_CODES.ERR_GEN_000.code
+          console.error(formatErrorLog(errorCode, "MANAGEMENT_URL no configurada"))
+          return NextResponse.json(
+            {
+              error: true,
+              message: "Portal de administración no disponible.",
+              redirect: `/error?code=${errorCode}`,
+            },
+            { status: 500 }
+          )
+        }
+
+        console.log("✅ [REGISTER] Single role 'supplier', redirecting to management portal")
+
+        await setSessionCookie({
+          sub: session.sub,
+          email: session.email,
+          name: formData.name,
+          picture: session.picture,
+          provider: session.provider,
+          role: "supplier",
+          userId: createdUser.id,
+          supabaseAccessToken: session.supabaseAccessToken ?? "",
+          supabaseRefreshToken: session.supabaseRefreshToken ?? "",
+          authId: session.authId ?? "",
+        })
+
+        return NextResponse.json(
+          {
+            success: true,
+            user: {
+              id: createdUser.id,
+              email: createdUser.email,
+              name: createdUser.name,
+              role: "supplier",
+            },
+            redirect: mgmtUrl,
+          },
+          { status: 201 }
+        )
+      }
+
+      const userRole: UserRole = selectedRole
       const redirectUrl = getRoleRedirectUrl(userRole)
 
       console.log("✅ [REGISTER] Single role, creating complete session:", userRole)

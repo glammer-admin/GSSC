@@ -166,6 +166,8 @@ export function ProductList({ products, categories, projectId }: ProductListProp
                     <ProductKebabMenu
                       projectId={projectId}
                       productId={product.id}
+                      glamProductId={product.glamProductId ?? ""}
+                      status={product.status}
                     />
                   </div>
                 </div>

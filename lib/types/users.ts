@@ -6,6 +6,14 @@
 
 export type UserRole = "buyer" | "organizer"
 
+/**
+ * Roles disponibles durante el registro. Incluye `supplier` (Administrador),
+ * que solo se ofrece a emails del dominio admin (@glam-urban.com). Una vez
+ * autenticado, una sesión con `role === "supplier"` se redirige al portal
+ * de management; no se opera dentro de GSSC.
+ */
+export type RegistrationRole = UserRole | "supplier"
+
 export type UserStatus = "Active" | "Inactive" | "Pending"
 
 export interface DeliveryAddress {
@@ -39,6 +47,18 @@ export const ROLE_DISPLAY_NAMES: Record<UserRole, string> = {
   organizer: "Organizador",
 }
 
+export const REGISTRATION_ROLE_DISPLAY_NAMES: Record<RegistrationRole, string> = {
+  buyer: "Comprador",
+  organizer: "Organizador",
+  supplier: "Administrador",
+}
+
+export const REGISTRATION_ROLE_DESCRIPTIONS: Record<RegistrationRole, string> = {
+  buyer: "Compra productos y servicios de la plataforma",
+  organizer: "Organiza eventos y gestiona proyectos",
+  supplier: "Gestiona las tablas madre del catálogo (portal de administración)",
+}
+
 export const AVAILABLE_REGISTRATION_ROLES: readonly UserRole[] = ["buyer", "organizer"] as const
 
 export const ADMIN_EMAIL_DOMAIN = "glam-urban.com"
@@ -50,6 +70,23 @@ export function isAdminDomain(email: string | null | undefined): boolean {
 
 export function isUserRole(value: string): value is UserRole {
   return value === "buyer" || value === "organizer"
+}
+
+export function isRegistrationRole(value: string): value is RegistrationRole {
+  return value === "buyer" || value === "organizer" || value === "supplier"
+}
+
+/**
+ * Devuelve los roles disponibles en el formulario de registro según el email
+ * del usuario. Para emails @glam-urban.com agrega `supplier` (Administrador).
+ */
+export function getRegistrationRolesForEmail(
+  email: string | null | undefined
+): readonly RegistrationRole[] {
+  if (isAdminDomain(email)) {
+    return ["buyer", "organizer", "supplier"] as const
+  }
+  return AVAILABLE_REGISTRATION_ROLES
 }
 
 /**

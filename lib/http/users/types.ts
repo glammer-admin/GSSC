@@ -7,20 +7,25 @@
 import {
   ROLE_DASHBOARD_MAP,
   type UserRole,
+  type RegistrationRole,
   type UserStatus,
   type DeliveryAddress,
   type GlamUser,
 } from "@/lib/types/users"
 
-export type { UserRole, UserStatus, DeliveryAddress, GlamUser }
+export type { UserRole, RegistrationRole, UserStatus, DeliveryAddress, GlamUser }
 
 export {
   ROLE_DASHBOARD_MAP,
   ROLE_DISPLAY_NAMES,
+  REGISTRATION_ROLE_DISPLAY_NAMES,
+  REGISTRATION_ROLE_DESCRIPTIONS,
   AVAILABLE_REGISTRATION_ROLES,
   ADMIN_EMAIL_DOMAIN,
   isAdminDomain,
   isUserRole,
+  isRegistrationRole,
+  getRegistrationRolesForEmail,
   toGsscRoles,
 } from "@/lib/types/users"
 
@@ -49,7 +54,7 @@ export function getRoleRedirectUrl(role: UserRole): string {
 export interface CreateUserDTO {
   name: string
   email: string
-  role: UserRole[]
+  role: RegistrationRole[]
   phone_number: string
   status?: UserStatus
   delivery_address: DeliveryAddress
@@ -58,7 +63,7 @@ export interface CreateUserDTO {
 // DTO para actualizar usuario
 export interface UpdateUserDTO {
   name?: string
-  role?: UserRole[]
+  role?: RegistrationRole[]
   phone_number?: string
   status?: UserStatus
   delivery_address?: Partial<DeliveryAddress>

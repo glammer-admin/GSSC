@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { getSession, isTemporarySession } from "@/lib/auth/session-manager"
 import { OnboardingForm } from "@/components/onboarding-form"
-import { AVAILABLE_REGISTRATION_ROLES } from "@/lib/types/users"
+import { getRegistrationRolesForEmail } from "@/lib/types/users"
 
 /**
  * Página de onboarding para nuevos usuarios
@@ -26,8 +26,9 @@ export default async function OnboardingPage() {
     email: session.email,
   }
 
-  // Roles disponibles en GSSC. El rol admin (supplier) se gestiona en gssc-management.
-  const availableRoles = [...AVAILABLE_REGISTRATION_ROLES]
+  // Roles disponibles en el formulario. Para emails del dominio admin (@glam-urban.com)
+  // se incluye `supplier` (Administrador), que dirige al portal de management.
+  const availableRoles = [...getRegistrationRolesForEmail(session.email)]
 
   return (
     <main className="min-h-screen bg-background">

@@ -436,3 +436,87 @@ export async function PATCH(
     )
   }
 }
+
+/**
+ * DELETE /api/product/[id]
+ * Elimina un producto en borrador junto con sus imágenes en Storage
+ */
+export async function DELETE(
+  request: NextRequest,
+  context: RouteContext
+): Promise<NextResponse> {
+  try {
+    const session = await getSession()
+    if (!session || !isCompleteSession(session)) {
+      return NextResponse.json(
+        { success: false, error: "No autorizado" },
+        { status: 401 }
+      )
+    }
+
+    if (session.role !== "organizer") {
+      return NextResponse.json(
+        { success: false, error: "No tienes permiso para eliminar productos" },
+        { status: 403 }
+      )
+    }
+
+    const { id: productId } = await context.params
+    const userId = session.userId || session.sub
+    const productClient = getProductClient()
+
+    const currentProduct = await productClient.getProductById(productId)
+    if (!currentProduct) {
+      return NextResponse.json(
+        { success: false, error: "Producto no encontrado" },
+        { status: 404 }
+      )
+    }
+
+    const projectClient = getProjectClient()
+    const project = await projectClient.getProjectById(currentProduct.project_id)
+    if (!project || project.organizer_id !== userId) {
+      return NextResponse.json(
+        { success: false, error: "No tienes permiso para eliminar este producto" },
+        { status: 403 }
+      )
+    }
+
+    if (currentProduct.status !== "draft") {
+      return NextResponse.json(
+        { success: false, error: "PRODUCT_NOT_DRAFT" },
+        { status: 400 }
+      )
+    }
+
+    await productClient.deleteProduct(productId)
+
+    const storageClient = getProductStorageClient()
+    const storageOk = await storageClient.deleteAllProductImages(currentProduct.project_id, productId)
+    if (!storageOk) {
+      console.warn(`⚠️ [API PRODUCT] Storage cleanup incomplete for product: ${productId}`)
+    }
+
+    console.log(`✅ [API PRODUCT] Product deleted: ${productId}`)
+
+    return NextResponse.json({ success: true, message: "Producto eliminado exitosamente" })
+  } catch (error) {
+    console.error("Error deleting product:", error)
+    if (error instanceof HttpError) {
+      return NextResponse.json(
+        { success: false, error: `Error del servidor: ${error.status}` },
+        { status: error.status }
+      )
+    }
+    if (error instanceof NetworkError) {
+      return NextResponse.json(
+        { success: false, error: "Error de conexión con el servidor" },
+        { status: 503 }
+      )
+    }
+    return NextResponse.json(
+      { success: false, error: "Error interno del servidor" },
+      { status: 500 }
+    )
+  }
+}

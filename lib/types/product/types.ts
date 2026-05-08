@@ -813,12 +813,6 @@ export function toUpdateProductDTO(input: UpdateProductInput): UpdateProductDTO 
   if (input.status !== undefined) {
     dto.status = input.status
   }
-  if (input.personalizationConfig !== undefined) {
-    dto.personalization_config = input.personalizationConfig
-  }
-  if (input.selectedAttributes !== undefined) {
-    dto.selected_attributes = input.selectedAttributes
-  }
   if (input.glamProductId !== undefined) {
     dto.glam_product_id = input.glamProductId
   }

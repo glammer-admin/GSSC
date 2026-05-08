@@ -63,6 +63,20 @@ interface FormErrors {
   attributes?: string
 }
 
+function getProductErrorMessage(code: string): string {
+  const messages: Record<string, string> = {
+    CONFIG_IMMUTABLE:
+      "La configuración de personalización no puede cambiarse después de crear el producto.",
+    ATTRIBUTES_IMMUTABLE:
+      "Los atributos no pueden cambiarse después de crear el producto.",
+    INVALID_STATUS_TRANSITION:
+      "Este cambio de estado no está permitido en este momento.",
+    PRODUCT_INACTIVE_READONLY:
+      "El producto está inactivo. Solo puedes reactivarlo.",
+  }
+  return messages[code] ?? code ?? "Error al guardar el producto."
+}
+
 export function ProductForm({
   projectId,
   product,
@@ -364,7 +378,9 @@ export function ProductForm({
     } catch (error) {
       console.error("Error saving product:", error)
       toast.error(
-        error instanceof Error ? error.message : "Error al guardar el producto"
+        getProductErrorMessage(
+          error instanceof Error ? error.message : ""
+        )
       )
       setIsSubmitting(false)
     }

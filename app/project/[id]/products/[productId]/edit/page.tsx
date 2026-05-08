@@ -155,14 +155,14 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
   const isActive = product.status === "active"
   const isInactive = product.status === "inactive"
 
-  const isConfigEditable = isDraft
+  const isConfigEditable = false
   const isDataEditable = isDraft || isActive
 
   const statusMessage = isInactive
     ? "Este producto está inactivo. Todos los campos son de solo lectura. Solo puedes reactivar el producto."
     : isActive
     ? "La configuración de categoría, producto del catálogo, atributos y personalización no puede modificarse porque el producto está activo. Solo puedes editar el nombre, descripción y estado."
-    : null
+    : "La configuración de categoría, producto del catálogo, atributos y personalización no puede modificarse una vez creado el producto. Puedes editar el nombre, descripción, precio y estado."
   
   return (
     <ServerAuthenticatedLayout session={session}>

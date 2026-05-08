@@ -17,8 +17,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import {
-  ROLE_DISPLAY_NAMES,
-  type UserRole
+  REGISTRATION_ROLE_DISPLAY_NAMES,
+  REGISTRATION_ROLE_DESCRIPTIONS,
+  type RegistrationRole,
 } from "@/lib/types/users"
 
 interface OnboardingFormProps {
@@ -26,7 +27,7 @@ interface OnboardingFormProps {
     name: string
     email: string
   }
-  availableRoles: UserRole[]
+  availableRoles: RegistrationRole[]
 }
 
 interface FormData {
@@ -37,7 +38,7 @@ interface FormData {
   country: string
   street: string
   additional_info: string
-  roles: UserRole[]
+  roles: RegistrationRole[]
 }
 
 interface FormErrors {
@@ -122,7 +123,7 @@ export function OnboardingForm({ prefillData, availableRoles }: OnboardingFormPr
     }
   }
 
-  const handleRoleToggle = (role: UserRole) => {
+  const handleRoleToggle = (role: RegistrationRole) => {
     setFormData(prev => {
       const newRoles = prev.roles.includes(role)
         ? prev.roles.filter(r => r !== role)
@@ -421,11 +422,10 @@ export function OnboardingForm({ prefillData, availableRoles }: OnboardingFormPr
                 {/* Info del rol */}
                 <div>
                   <span className={`font-medium ${isSelected ? "text-primary" : "text-foreground"}`}>
-                    {ROLE_DISPLAY_NAMES[role]}
+                    {REGISTRATION_ROLE_DISPLAY_NAMES[role]}
                   </span>
                   <p className="text-sm text-muted-foreground">
-                    {role === "buyer" && "Compra productos y servicios de la plataforma"}
-                    {role === "organizer" && "Organiza eventos y gestiona proyectos"}
+                    {REGISTRATION_ROLE_DESCRIPTIONS[role]}
                   </p>
                 </div>
               </label>

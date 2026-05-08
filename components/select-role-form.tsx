@@ -3,7 +3,11 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ROLE_DISPLAY_NAMES, type UserRole } from "@/lib/types/users"
+import {
+  REGISTRATION_ROLE_DISPLAY_NAMES,
+  REGISTRATION_ROLE_DESCRIPTIONS,
+  type RegistrationRole,
+} from "@/lib/types/users"
 
 interface SelectRoleFormProps {
   availableRoles: string[]
@@ -11,7 +15,7 @@ interface SelectRoleFormProps {
 }
 
 // Iconos para cada rol
-const ROLE_ICONS: Record<UserRole, React.ReactNode> = {
+const ROLE_ICONS: Record<RegistrationRole, React.ReactNode> = {
   buyer: (
     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -22,12 +26,11 @@ const ROLE_ICONS: Record<UserRole, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
   ),
-}
-
-// Descripciones para cada rol
-const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
-  buyer: "Compra productos y servicios de la plataforma",
-  organizer: "Organiza eventos y gestiona proyectos",
+  supplier: (
+    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+  ),
 }
 
 export function SelectRoleForm({ availableRoles, userEmail }: SelectRoleFormProps) {
@@ -78,7 +81,7 @@ export function SelectRoleForm({ availableRoles, userEmail }: SelectRoleFormProp
       {/* Lista de roles */}
       <div className="space-y-3">
         {availableRoles.map((role) => {
-          const userRole = role as UserRole
+          const registrationRole = role as RegistrationRole
           const isSelected = selectedRole === role
           
           return (
@@ -99,19 +102,19 @@ export function SelectRoleForm({ availableRoles, userEmail }: SelectRoleFormProp
             >
               {/* Icono */}
               <div className={`
-                p-3 rounded-full 
+                p-3 rounded-full
                 ${isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}
               `}>
-                {ROLE_ICONS[userRole]}
+                {ROLE_ICONS[registrationRole]}
               </div>
-              
+
               {/* Info */}
               <div className="flex-1">
                 <h3 className={`font-semibold ${isSelected ? "text-primary" : "text-foreground"}`}>
-                  {ROLE_DISPLAY_NAMES[userRole]}
+                  {REGISTRATION_ROLE_DISPLAY_NAMES[registrationRole]}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {ROLE_DESCRIPTIONS[userRole]}
+                  {REGISTRATION_ROLE_DESCRIPTIONS[registrationRole]}
                 </p>
               </div>
 

@@ -6,6 +6,9 @@ import {
 } from "@/lib/auth/session-manager"
 import {
   getRoleRedirectUrl,
+  getManagementUrl,
+  isAdminDomain,
+  isRegistrationRole,
   isUserRole,
   type UserRole,
 } from "@/lib/http/users/types"
@@ -14,8 +17,9 @@ import { getUsersClient } from "@/lib/http/users/users-client"
 /**
  * POST /api/auth/set-role
  * Endpoint para seleccionar rol cuando el usuario tiene múltiples roles.
- * Solo acepta roles válidos de GSSC (buyer/organizer). El rol admin (supplier)
- * se gestiona en gssc-management y no es seleccionable desde esta app.
+ * Acepta buyer/organizer en cualquier dominio. Acepta `supplier` (Administrador)
+ * únicamente cuando el email de la sesión pertenece a @glam-urban.com; en ese
+ * caso, redirige al portal de management.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -54,9 +58,9 @@ export async function POST(request: NextRequest) {
     console.log("🔄 [SET ROLE] Role selection request:", role)
     console.log("🔄 [SET ROLE] Available roles:", session.availableRoles)
 
-    // 4. Validar que el rol sea válido en GSSC (no acepta supplier).
-    if (!isUserRole(role)) {
-      console.error("❌ [SET ROLE] Role not allowed in GSSC:", role)
+    // 4. Validar que el rol esté en el conjunto de roles de registro válidos.
+    if (!isRegistrationRole(role)) {
+      console.error("❌ [SET ROLE] Unknown role:", role)
       return NextResponse.json(
         { error: "Invalid role", message: "Rol no disponible en esta plataforma." },
         { status: 403 }
@@ -72,8 +76,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const userRole: UserRole = role
-
     // 6. Obtener userId de la BD
     let userId: string | undefined
     try {
@@ -84,12 +86,53 @@ export async function POST(request: NextRequest) {
       console.warn("⚠️ [SET ROLE] Could not fetch user ID:", error)
     }
 
-    // 7. URL de redirección según rol.
+    // 7. Caso especial: supplier (Administrador) → portal de management.
+    //    Solo permitido para emails @glam-urban.com (defensa server-side; el dominio
+    //    se deriva del email firmado en la sesión, nunca del payload del cliente).
+    if (role === "supplier") {
+      if (!isAdminDomain(session.email)) {
+        console.error("❌ [SET ROLE] supplier role attempted from non-admin domain")
+        return NextResponse.json(
+          { error: "Invalid role", message: "Rol no permitido para este dominio." },
+          { status: 403 }
+        )
+      }
+
+      const mgmtUrl = getManagementUrl()
+      if (!mgmtUrl) {
+        console.error("❌ [SET ROLE] MANAGEMENT_URL no configurada")
+        return NextResponse.json(
+          { error: "Portal no disponible", message: "Portal de administración no disponible." },
+          { status: 500 }
+        )
+      }
+
+      console.log("✅ [SET ROLE] Updating session with role: supplier (mgmt portal)")
+      await updateSessionWithRole(session, "supplier", userId)
+
+      return NextResponse.json(
+        {
+          success: true,
+          role: "supplier",
+          redirect: mgmtUrl,
+        },
+        { status: 200 }
+      )
+    }
+
+    // 8. Roles GSSC (buyer/organizer): redirección al dashboard correspondiente.
+    if (!isUserRole(role)) {
+      // Defensa redundante: el branch supplier ya retornó arriba.
+      return NextResponse.json(
+        { error: "Invalid role", message: "Rol no disponible en esta plataforma." },
+        { status: 403 }
+      )
+    }
+
+    const userRole: UserRole = role
     const redirectUrl = getRoleRedirectUrl(userRole)
 
     console.log("✅ [SET ROLE] Updating session with role:", userRole)
-
-    // 8. Actualizar sesión con el rol seleccionado
     await updateSessionWithRole(session, userRole, userId)
 
     return NextResponse.json(

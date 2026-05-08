@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation"
 import { getSession, isTemporarySession } from "@/lib/auth/session-manager"
 import { SelectRoleForm } from "@/components/select-role-form"
-import { toGsscRoles } from "@/lib/types/users"
+import {
+  isAdminDomain,
+  isRegistrationRole,
+  toGsscRoles,
+  type RegistrationRole,
+} from "@/lib/types/users"
 
 /**
  * Página de selección de rol
@@ -20,9 +25,14 @@ export default async function SelectRolePage() {
     redirect("/")
   }
 
-  // Filtro defensivo: solo dejamos roles válidos de GSSC (buyer/organizer).
-  // Sesiones legadas pueden traer "supplier" que ya no existe en esta app.
-  const availableRoles = toGsscRoles(session.availableRoles || [])
+  // Filtro defensivo según dominio del email:
+  // - @glam-urban.com: se permite `supplier` (Administrador) además de buyer/organizer.
+  // - Cualquier otro dominio: solo buyer/organizer (filtrado vía toGsscRoles).
+  // El dominio se deriva exclusivamente de la sesión SSO firmada server-side.
+  const sessionRoles = session.availableRoles || []
+  const availableRoles: RegistrationRole[] = isAdminDomain(session.email)
+    ? sessionRoles.filter(isRegistrationRole)
+    : toGsscRoles(sessionRoles)
 
   if (availableRoles.length === 0) {
     redirect("/")
