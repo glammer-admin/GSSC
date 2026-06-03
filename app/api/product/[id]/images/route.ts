@@ -233,7 +233,7 @@ export async function POST(
     // Crear registro en la base de datos
     const backendImage = await productClient.createProductImage({
       product_id: productId,
-      url: uploadResult.path,
+      url: uploadResult.publicUrl,
       position,
       source,
     })

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession, isCompleteSession } from "@/lib/auth/session-manager"
-import { getProductClient, HttpError, NetworkError } from "@/lib/http/product"
+import { getProductClient, getProductStorageClient, HttpError, NetworkError } from "@/lib/http/product"
 import { getProjectClient } from "@/lib/http/project"
 import {
   validateProductName,
@@ -122,13 +122,13 @@ export async function GET(
     )
 
     // Obtener imágenes de cada producto
+    const storageClient = getProductStorageClient()
     const productsWithImages = await Promise.all(
       backendProducts.map(async (bp) => {
         const backendImages = await productClient.getProductImages(bp.id)
-        const images = backendImages.map(img => {
-          const publicUrl = `${process.env.BACKEND_API_URL?.replace(/\/rest\/v1(\/.*)?$/, "")}/storage/v1/object/public/product-images/${img.url}`
-          return toProductImage(img, publicUrl)
-        })
+        const images = backendImages.map(img =>
+          toProductImage(img, storageClient.getPublicUrlFromPath(img.url))
+        )
         
         const glamProduct = glamProductMap.get(bp.glam_product_id)
         const category = glamProduct ? categoriesMap.get(glamProduct.category_id) : undefined

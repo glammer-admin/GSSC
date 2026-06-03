@@ -76,10 +76,28 @@ class ProductStorageClient {
   }
 
   /**
-   * Obtiene la URL pública desde un path completo
+   * Obtiene la URL pública desde un path o URL ya completa.
+   * Idempotente: si el valor ya es una URL absoluta (http/https) la devuelve
+   * tal cual; si es un path relativo legacy, antepone base + bucket.
    */
-  getPublicUrlFromPath(path: string): string {
-    return `${this.baseUrl}/storage/v1/object/public/${this.bucket}/${path}`
+  getPublicUrlFromPath(pathOrUrl: string): string {
+    if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl
+    return `${this.baseUrl}/storage/v1/object/public/${this.bucket}/${pathOrUrl}`
+  }
+
+  /**
+   * Extrae el path relativo dentro del bucket a partir de un path o URL completa.
+   * Soporta URL pública (.../object/public/{bucket}/{path}), URL de objeto
+   * (.../object/{bucket}/{path}) y paths relativos (los devuelve sin cambios).
+   */
+  private extractStoragePath(pathOrUrl: string): string {
+    const marker = `/object/public/${this.bucket}/`
+    let i = pathOrUrl.indexOf(marker)
+    if (i !== -1) return pathOrUrl.slice(i + marker.length)
+    const alt = `/object/${this.bucket}/`
+    i = pathOrUrl.indexOf(alt)
+    if (i !== -1) return pathOrUrl.slice(i + alt.length)
+    return pathOrUrl
   }
 
   /**
@@ -290,11 +308,12 @@ class ProductStorageClient {
   }
 
   /**
-   * Elimina una imagen por su path completo
-   * @param path - Path completo de la imagen
+   * Elimina una imagen por su path o URL completa
+   * @param pathOrUrl - Path relativo dentro del bucket o URL pública completa
    * @returns true si se eliminó correctamente
    */
-  async deleteImageByPath(path: string): Promise<boolean> {
+  async deleteImageByPath(pathOrUrl: string): Promise<boolean> {
+    const path = this.extractStoragePath(pathOrUrl)
     try {
       console.log(`🗑️ [PRODUCT STORAGE] Deleting image by path: ${path}`)
 
