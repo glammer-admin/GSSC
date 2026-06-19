@@ -11,18 +11,18 @@ export {
   isSessionExpiringSoon,
   getSession,
   getCompleteSession,
-} from "@glam-urban/gssc-authn"
+} from "@glammer-admin/gssc-authn"
 
 export type {
   SessionData,
   TemporarySessionData,
   AnySessionData,
   SessionRole,
-} from "@glam-urban/gssc-authn"
+} from "@glammer-admin/gssc-authn"
 
 // Import types locally for use in write functions
-import type { SessionData, TemporarySessionData, AnySessionData, SessionRole } from "@glam-urban/gssc-authn"
-import { SESSION_COOKIE_NAME, isCompleteSession } from "@glam-urban/gssc-authn"
+import type { SessionData, TemporarySessionData, AnySessionData, SessionRole } from "@glammer-admin/gssc-authn"
+import { SESSION_COOKIE_NAME, isCompleteSession } from "@glammer-admin/gssc-authn"
 
 // Duración de la sesión (24 horas)
 const SESSION_DURATION = 24 * 60 * 60 // 24 horas en segundos
@@ -229,7 +229,7 @@ export function isSupabaseTokenExpiringSoon(token: string): boolean {
  * se hace en el middleware vía refreshSession() + response.cookies.
  */
 export async function getValidSupabaseToken(): Promise<string> {
-  const { getCompleteSession: getComplete } = await import("@glam-urban/gssc-authn")
+  const { getCompleteSession: getComplete } = await import("@glammer-admin/gssc-authn")
   const session = await getComplete()
 
   if (!session?.supabaseAccessToken) {
@@ -261,7 +261,7 @@ export async function getValidSupabaseToken(): Promise<string> {
  */
 export async function refreshSession(): Promise<boolean> {
   try {
-    const { getSession } = await import("@glam-urban/gssc-authn")
+    const { getSession } = await import("@glammer-admin/gssc-authn")
     const session = await getSession()
     if (!session) {
       return false

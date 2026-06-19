@@ -1,4 +1,4 @@
-import { initGsscAuthn } from "@glam-urban/gssc-authn"
+import { initGsscAuthn } from "@glammer-admin/gssc-authn"
 
 export function register() {
   initGsscAuthn({
