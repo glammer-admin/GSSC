@@ -1,0 +1,22 @@
+# wrangler.toml
+# Un archivo por cada frontend. Cambia "name" para que sea único por app
+# (ej: web-ssr-1, web-ssr-2, web-cliente).
+# Docs: https://opennext.js.org/cloudflare/get-started
+
+name = "gssc-frontend"
+main = ".open-next/worker.js"
+compatibility_date = "2025-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Sirve los assets estáticos generados por OpenNext
+assets = { directory = ".open-next/assets", binding = "ASSETS" }
+
+# Dominio propio (opcional). Requiere que el dominio esté en tu cuenta CF.
+# routes = [
+#   { pattern = "app.midominio.com", custom_domain = true }
+# ]
+
+# Variables públicas de build van como vars; los secretos con `wrangler secret put`.
+# [vars]
+# NEXT_PUBLIC_SUPABASE_URL = "https://<ref>.supabase.co"
+# NEXT_PUBLIC_ORCHESTRATOR_URL = "https://api.midominio.com"
