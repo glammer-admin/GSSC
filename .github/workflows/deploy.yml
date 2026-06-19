@@ -1,0 +1,41 @@
+name: Deploy frontend (Cloudflare)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Necesario para que npm ci pueda leer @glammer-admin/gssc-authn de GitHub Packages
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # wrangler/miniflare requieren Node >= 22
+          node-version: 22
+          cache: npm
+
+      # El .npmrc usa ${NODE_AUTH_TOKEN} para el scope @glammer-admin (GitHub Packages)
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Construye Next.js para Cloudflare Workers (OpenNext)
+      - run: npx opennextjs-cloudflare build
+        env:
+          # Variables públicas de build (NEXT_PUBLIC_*) van aquí si las necesitas:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_ORCHESTRATOR_URL: ${{ vars.NEXT_PUBLIC_ORCHESTRATOR_URL }}
+
+      - name: Deploy a Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
