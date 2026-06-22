@@ -1,0 +1,28 @@
+# .dev.vars.example — PLANTILLA (sin valores reales)
+#
+# Para probar el Worker localmente con OpenNext:
+#   1. cp .dev.vars.example .dev.vars
+#   2. completa los valores
+#   3. npm run cf:preview     (build + preview con miniflare/workerd)
+#
+# wrangler lee `.dev.vars` automáticamente y lo expone como process.env en el
+# Worker, igual que en producción. `.dev.vars` está gitignored: NUNCA lo subas.
+# En producción estos valores van como Worker secrets / [vars], no en este archivo.
+
+# ── Secrets (sensibles) ────────────────────────────────────────────────
+SESSION_SECRET=""
+GOOGLE_CLIENT_SECRET=""
+MICROSOFT_CLIENT_SECRET=""
+META_APP_SECRET=""
+BACKEND_API_KEY=""
+SUPABASE_SERVICE_ROLE_KEY=""
+
+# ── Config de runtime no sensible (en prod -> [vars] de wrangler.toml) ──
+BACKEND_API_URL=""
+BACKEND_DB_SCHEMA=""
+SUPABASE_URL=""
+MANAGEMENT_URL=""
+COOKIE_DOMAIN=""
+GOOGLE_CLIENT_ID=""
+MICROSOFT_CLIENT_ID=""
+META_APP_ID=""

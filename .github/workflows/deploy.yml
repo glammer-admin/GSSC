@@ -17,8 +17,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # wrangler/miniflare requieren Node >= 22
-          node-version: 22
+          # wrangler/miniflare requieren Node >= 22; usamos 24 para igualar el entorno local
+          node-version: 24
           cache: npm
 
       # El .npmrc usa ${NODE_AUTH_TOKEN} para el scope @glammer-admin (GitHub Packages)
@@ -27,11 +27,22 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Construye Next.js para Cloudflare Workers (OpenNext)
+      # Las NEXT_PUBLIC_* se "hornean" en el bundle EN BUILD -> deben estar aquí.
+      # Defínelas como GitHub repo "vars" (Settings -> Secrets and variables -> Actions -> Variables).
+      # NO pongas secrets aquí: los secrets de runtime van en el Worker (wrangler secret / dashboard).
       - run: npx opennextjs-cloudflare build
         env:
-          # Variables públicas de build (NEXT_PUBLIC_*) van aquí si las necesitas:
+          NEXT_PUBLIC_APP_ENV: ${{ vars.NEXT_PUBLIC_APP_ENV }}
+          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_PRODUCTION_URL: ${{ vars.NEXT_PUBLIC_PRODUCTION_URL }}
+          NEXT_PUBLIC_STAGING_URL: ${{ vars.NEXT_PUBLIC_STAGING_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_ORCHESTRATOR_URL: ${{ vars.NEXT_PUBLIC_ORCHESTRATOR_URL }}
+          NEXT_PUBLIC_GLAMFORGE_URL: ${{ vars.NEXT_PUBLIC_GLAMFORGE_URL }}
+          NEXT_PUBLIC_ONLINE_EDITOR_URL: ${{ vars.NEXT_PUBLIC_ONLINE_EDITOR_URL }}
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+          NEXT_PUBLIC_MICROSOFT_CLIENT_ID: ${{ vars.NEXT_PUBLIC_MICROSOFT_CLIENT_ID }}
 
       - name: Deploy a Cloudflare
         uses: cloudflare/wrangler-action@v3

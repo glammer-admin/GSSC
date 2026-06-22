@@ -16,7 +16,38 @@ assets = { directory = ".open-next/assets", binding = "ASSETS" }
 #   { pattern = "app.midominio.com", custom_domain = true }
 # ]
 
-# Variables públicas de build van como vars; los secretos con `wrangler secret put`.
+# ─────────────────────────────────────────────────────────────────────
+# Variables de RUNTIME no sensibles de ESTE ambiente (pruebas).
+# Reglas:
+#   - SECRETS (SESSION_SECRET, *_CLIENT_SECRET, *_API_KEY, SERVICE_ROLE_KEY)
+#     NO van aquí -> usar `wrangler secret put` o el dashboard (cifrados).
+#   - NEXT_PUBLIC_* tampoco van aquí -> se inyectan en BUILD (GitHub Actions).
+# Descomenta y completa con los valores reales del ambiente de pruebas.
+# ─────────────────────────────────────────────────────────────────────
 # [vars]
-# NEXT_PUBLIC_SUPABASE_URL = "https://<ref>.supabase.co"
-# NEXT_PUBLIC_ORCHESTRATOR_URL = "https://api.midominio.com"
+# BACKEND_API_URL     = ""          # URL del backend (Supabase REST / orquestador)
+# BACKEND_DB_SCHEMA   = ""
+# SUPABASE_URL        = ""          # https://<ref>.supabase.co
+# MANAGEMENT_URL      = ""
+# COOKIE_DOMAIN       = ""          # ej: .glam-urban.com (sesión entre subdominios)
+# GOOGLE_CLIENT_ID    = ""          # client_id OAuth (no es secreto)
+# MICROSOFT_CLIENT_ID = ""
+# META_APP_ID         = ""
+
+# ─────────────────────────────────────────────────────────────────────
+# AMBIENTES futuros (pruebas / producción).
+# Cada `[env.<x>]` necesita su propio `name`, sus `[env.<x>.vars]`, y sus
+# secrets cargados por ambiente:
+#   wrangler secret put SESSION_SECRET --env production
+#   npm run cf:deploy -- --env production
+# El ambiente por defecto (sin --env) es esta config de arriba (pruebas).
+# ─────────────────────────────────────────────────────────────────────
+# [env.staging]
+# name = "gssc-frontend-staging"
+# [env.staging.vars]
+# SUPABASE_URL = ""
+#
+# [env.production]
+# name = "gssc-frontend-production"
+# [env.production.vars]
+# SUPABASE_URL = ""
