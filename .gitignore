@@ -26,6 +26,12 @@ yarn-error.log*
 /.open-next/
 .wrangler/
 
+# cloudflare runtime secrets locales — NUNCA commitear valores reales
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+/secrets.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
