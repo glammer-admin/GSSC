@@ -18,6 +18,9 @@ yarn-error.log*
 
 # env files
 .env*
+# `env.local` no empieza con `.env`, así que `.env*` no lo cubre. Tiene secrets reales.
+env.local
+env.*.local
 
 # vercel
 .vercel
