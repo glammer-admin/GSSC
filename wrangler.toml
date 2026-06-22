@@ -11,10 +11,11 @@ compatibility_flags = ["nodejs_compat"]
 # Sirve los assets estáticos generados por OpenNext
 assets = { directory = ".open-next/assets", binding = "ASSETS" }
 
-# Dominio propio (opcional). Requiere que el dominio esté en tu cuenta CF.
-# routes = [
-#   { pattern = "app.midominio.com", custom_domain = true }
-# ]
+# Dominio propio. La zona glam-urban.dev debe estar activa en esta cuenta CF.
+# custom_domain = true hace que CF cree el registro DNS y el cert TLS solo.
+routes = [
+  { pattern = "gssc.glam-urban.dev", custom_domain = true }
+]
 
 # ─────────────────────────────────────────────────────────────────────
 # Variables de RUNTIME no sensibles de ESTE ambiente (pruebas).
