@@ -22,17 +22,17 @@ assets = { directory = ".open-next/assets", binding = "ASSETS" }
 #   - SECRETS (SESSION_SECRET, *_CLIENT_SECRET, *_API_KEY, SERVICE_ROLE_KEY)
 #     NO van aquí -> usar `wrangler secret put` o el dashboard (cifrados).
 #   - NEXT_PUBLIC_* tampoco van aquí -> se inyectan en BUILD (GitHub Actions).
-# Descomenta y completa con los valores reales del ambiente de pruebas.
+# Valores del ambiente de pruebas (default).
 # ─────────────────────────────────────────────────────────────────────
-# [vars]
-# BACKEND_API_URL     = ""          # URL del backend (Supabase REST / orquestador)
-# BACKEND_DB_SCHEMA   = ""
-# SUPABASE_URL        = ""          # https://<ref>.supabase.co
-# MANAGEMENT_URL      = ""
-# COOKIE_DOMAIN       = ""          # ej: .glam-urban.com (sesión entre subdominios)
-# GOOGLE_CLIENT_ID    = ""          # client_id OAuth (no es secreto)
-# MICROSOFT_CLIENT_ID = ""
-# META_APP_ID         = ""
+[vars]
+SUPABASE_URL        = "https://jwlnlxxoooelfdfvidfx.supabase.co"
+BACKEND_API_URL     = "https://jwlnlxxoooelfdfvidfx.supabase.co/rest/v1/"
+BACKEND_DB_SCHEMA   = "gssc_db"
+MANAGEMENT_URL      = "https://gssc-manage.glam-urban.dev"
+COOKIE_DOMAIN       = ".glam-urban.dev"          # sesión entre subdominios
+GOOGLE_CLIENT_ID    = "385215853597-fujcjrfsa7t5rbe2unvnb9r0v382l648.apps.googleusercontent.com"
+MICROSOFT_CLIENT_ID = "48205c3a-d308-4022-b21d-594114bf1594"
+# META_APP_ID       = ""           # añadir si se activa login con Meta/Facebook
 
 # ─────────────────────────────────────────────────────────────────────
 # AMBIENTES futuros (pruebas / producción).
