@@ -29,7 +29,6 @@ routes = [
 SUPABASE_URL        = "https://jwlnlxxoooelfdfvidfx.supabase.co"
 BACKEND_API_URL     = "https://jwlnlxxoooelfdfvidfx.supabase.co/rest/v1/"
 BACKEND_DB_SCHEMA   = "gssc_db"
-MANAGEMENT_URL      = "https://gssc-manage.glam-urban.dev"
 COOKIE_DOMAIN       = ".glam-urban.dev"          # sesión entre subdominios
 GOOGLE_CLIENT_ID    = "385215853597-fujcjrfsa7t5rbe2unvnb9r0v382l648.apps.googleusercontent.com"
 MICROSOFT_CLIENT_ID = "48205c3a-d308-4022-b21d-594114bf1594"

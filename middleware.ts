@@ -99,6 +99,20 @@ export async function middleware(request: NextRequest) {
     // 3. Obtener y validar la sesión
     const session = await getSession()
 
+    // 3b. GSSC es exclusiva de organizadores. Defensa contra una sesión COMPLETA con un
+    //     rol que GSSC no atiende (p. ej. una cookie legacy con rol admin/supplier o buyer).
+    //     GSSC solo emite sesiones `organizer`, así que esto no debería pasar; si pasa,
+    //     rompemos el bucle: sin esta guarda, getDefaultRouteForRole devuelve "/" para
+    //     roles no-organizer y el handler de "/" vuelve a redirigir a "/" → bucle
+    //     ERR_TOO_MANY_REDIRECTS. Mostramos el login sin salir a ningún dominio externo.
+    if (session && isCompleteSession(session) && session.role !== "organizer") {
+      console.log("🔄 [MIDDLEWARE] Sesión no-organizer detectada, redirigiendo al login")
+      if (pathname !== "/") {
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+      return NextResponse.next()
+    }
+
     // 4. CASO ESPECIAL: Página de login (/)
     if (pathname === "/") {
       if (session) {
