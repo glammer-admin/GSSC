@@ -99,20 +99,14 @@ export async function middleware(request: NextRequest) {
     // 3. Obtener y validar la sesión
     const session = await getSession()
 
-    // 3b. GSSC es exclusiva de organizadores. La cookie de sesión se comparte en
-    //     .glam-urban.dev con otras apps (gssc-management / backoffice), así que puede
-    //     llegar una sesión COMPLETA con un rol que GSSC no atiende (admin/supplier, o
-    //     buyer legacy). No la servimos aquí: la enviamos a su portal externo SIN borrar
-    //     la cookie compartida (otras apps la verifican con el mismo SESSION_SECRET).
-    //     Sin esta guarda, getDefaultRouteForRole devuelve "/" para roles no-organizer y
-    //     el handler de "/" vuelve a redirigir a "/" → bucle ERR_TOO_MANY_REDIRECTS.
+    // 3b. GSSC es exclusiva de organizadores. Defensa contra una sesión COMPLETA con un
+    //     rol que GSSC no atiende (p. ej. una cookie legacy con rol admin/supplier o buyer).
+    //     GSSC solo emite sesiones `organizer`, así que esto no debería pasar; si pasa,
+    //     rompemos el bucle: sin esta guarda, getDefaultRouteForRole devuelve "/" para
+    //     roles no-organizer y el handler de "/" vuelve a redirigir a "/" → bucle
+    //     ERR_TOO_MANY_REDIRECTS. Mostramos el login sin salir a ningún dominio externo.
     if (session && isCompleteSession(session) && session.role !== "organizer") {
-      const mgmtUrl = process.env.MANAGEMENT_URL
-      if (mgmtUrl && mgmtUrl.length > 0) {
-        console.log("🔄 [MIDDLEWARE] Sesión no-organizer detectada, redirigiendo a portal externo")
-        return NextResponse.redirect(mgmtUrl)
-      }
-      // Sin URL externa configurada: evitar el bucle mostrando el login.
+      console.log("🔄 [MIDDLEWARE] Sesión no-organizer detectada, redirigiendo al login")
       if (pathname !== "/") {
         return NextResponse.redirect(new URL("/", request.url))
       }
