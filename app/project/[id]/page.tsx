@@ -131,9 +131,6 @@ export default async function ProjectDashboardPage({
     if (session.needsOnboarding) {
       redirect("/onboarding")
     }
-    if (session.needsRoleSelection) {
-      redirect("/select-role")
-    }
     notFound()
   }
 

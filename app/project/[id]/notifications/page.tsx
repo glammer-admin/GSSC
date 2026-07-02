@@ -100,9 +100,6 @@ export default async function NotificationsPage({
     if (session.needsOnboarding) {
       redirect("/onboarding")
     }
-    if (session.needsRoleSelection) {
-      redirect("/select-role")
-    }
     notFound()
   }
 

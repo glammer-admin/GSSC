@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation"
 import { getSession, isTemporarySession } from "@/lib/auth/session-manager"
 import { OnboardingForm } from "@/components/onboarding-form"
-import { getRegistrationRolesForEmail } from "@/lib/types/users"
 
 /**
  * Página de onboarding para nuevos usuarios
@@ -25,10 +24,6 @@ export default async function OnboardingPage() {
     name: session.name || "",
     email: session.email,
   }
-
-  // Roles disponibles en el formulario. Para emails del dominio admin (@glam-urban.com)
-  // se incluye `supplier` (Administrador), que dirige al portal de management.
-  const availableRoles = [...getRegistrationRolesForEmail(session.email)]
 
   return (
     <main className="min-h-screen bg-background">
@@ -59,7 +54,7 @@ export default async function OnboardingPage() {
       {/* Formulario */}
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="bg-card rounded-xl border border-border shadow-lg p-6 md:p-8">
-          <OnboardingForm prefillData={prefillData} availableRoles={availableRoles} />
+          <OnboardingForm prefillData={prefillData} />
         </div>
 
         {/* Footer */}

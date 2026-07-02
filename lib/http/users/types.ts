@@ -7,44 +7,24 @@
 import {
   ROLE_DASHBOARD_MAP,
   type UserRole,
-  type RegistrationRole,
   type UserStatus,
   type DeliveryAddress,
   type GlamUser,
 } from "@/lib/types/users"
 
-export type { UserRole, RegistrationRole, UserStatus, DeliveryAddress, GlamUser }
+export type { UserRole, UserStatus, DeliveryAddress, GlamUser }
 
 export {
   ROLE_DASHBOARD_MAP,
   ROLE_DISPLAY_NAMES,
-  REGISTRATION_ROLE_DISPLAY_NAMES,
-  REGISTRATION_ROLE_DESCRIPTIONS,
-  AVAILABLE_REGISTRATION_ROLES,
   ADMIN_EMAIL_DOMAIN,
   isAdminDomain,
   isUserRole,
-  isRegistrationRole,
-  getRegistrationRolesForEmail,
   toGsscRoles,
 } from "@/lib/types/users"
 
 /**
- * URL del portal de administración (gssc-management).
- * Server-only: lee process.env.MANAGEMENT_URL.
- * Devuelve null si no está configurado.
- */
-export function getManagementUrl(): string | null {
-  const url = process.env.MANAGEMENT_URL
-  if (!url || url.length === 0) {
-    console.warn("[getManagementUrl] MANAGEMENT_URL no configurada en el entorno")
-    return null
-  }
-  return url
-}
-
-/**
- * Devuelve la URL post-login para un rol válido de GSSC (buyer/organizer).
+ * Devuelve la URL post-login para un rol válido de GSSC (solo organizer).
  */
 export function getRoleRedirectUrl(role: UserRole): string {
   return ROLE_DASHBOARD_MAP[role]
@@ -54,7 +34,7 @@ export function getRoleRedirectUrl(role: UserRole): string {
 export interface CreateUserDTO {
   name: string
   email: string
-  role: RegistrationRole[]
+  role: UserRole[]
   phone_number: string
   status?: UserStatus
   delivery_address: DeliveryAddress
@@ -63,7 +43,7 @@ export interface CreateUserDTO {
 // DTO para actualizar usuario
 export interface UpdateUserDTO {
   name?: string
-  role?: RegistrationRole[]
+  role?: UserRole[]
   phone_number?: string
   status?: UserStatus
   delivery_address?: Partial<DeliveryAddress>

@@ -32,9 +32,6 @@ export default async function Dashboard() {
 
   // Verificar rol (RN-06: Solo organizer puede acceder)
   if (session.role !== "organizer") {
-    if (session.role === "buyer") {
-      redirect("/product/1234asdf")
-    }
     redirect("/")
   }
 

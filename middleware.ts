@@ -30,31 +30,25 @@ const PROTECTED_API_ROUTES = ["/api/protected"]
 // Rutas para sesiones temporales
 const TEMPORARY_SESSION_ROUTES = {
   onboarding: "/onboarding",
-  selectRole: "/select-role",
 }
 
 // Rutas de API para sesiones temporales
 const TEMPORARY_API_ROUTES = [
-  "/api/auth/set-role",
   "/api/users/register",
 ]
 
-// Rutas por rol (sesión completa). El rol `supplier` (admin) no tiene rutas en GSSC:
-// se redirige al portal gssc-management. Cualquier sesión con ese rol que llegue acá
-// es legacy y se cierra al inicio del middleware.
+// Rutas por rol (sesión completa). GSSC es exclusiva de organizadores; cualquier otra
+// sesión (buyer/supplier legacy) no tiene acceso a ninguna ruta.
 const ROLE_ROUTES: Partial<Record<SessionRole, string[]>> = {
   organizer: ["/dashboard", "/settings", "/project", "/api/settings", "/api/project", "/api/product"],
-  buyer: ["/product"],
 }
 
 /**
- * Obtiene la ruta por defecto para un rol soportado en GSSC.
- * `supplier` no debería llegar acá (se intercepta antes con redirect a MANAGEMENT_URL).
+ * Obtiene la ruta por defecto para el rol organizer (único rol de GSSC).
  */
 function getDefaultRouteForRole(role: SessionRole): string {
   const routes: Partial<Record<SessionRole, string>> = {
     organizer: "/dashboard",
-    buyer: "/product/1234asdf",
   }
   return routes[role] ?? "/"
 }
@@ -76,9 +70,6 @@ function getTemporarySessionRedirect(session: AnySessionData): string | null {
   
   if (session.needsOnboarding) {
     return TEMPORARY_SESSION_ROUTES.onboarding
-  }
-  if (session.needsRoleSelection) {
-    return TEMPORARY_SESSION_ROUTES.selectRole
   }
   return null
 }
@@ -108,18 +99,6 @@ export async function middleware(request: NextRequest) {
     // 3. Obtener y validar la sesión
     const session = await getSession()
 
-    // 3b. Rol admin (supplier): GSSC no atiende ese rol. Redirigimos al portal
-    //     gssc-management SIN borrar la cookie — el portal la comparte vía
-    //     domain=.glam-urban.dev y la verifica con el mismo SESSION_SECRET.
-    if (session && isCompleteSession(session) && session.role === "supplier") {
-      console.log("🔄 [MIDDLEWARE] Sesión con rol admin detectada, redirigiendo a gssc-management")
-      const mgmtUrl = process.env.MANAGEMENT_URL
-      const target = mgmtUrl && mgmtUrl.length > 0
-        ? mgmtUrl
-        : new URL("/", request.url).toString()
-      return NextResponse.redirect(target)
-    }
-
     // 4. CASO ESPECIAL: Página de login (/)
     if (pathname === "/") {
       if (session) {
@@ -130,7 +109,7 @@ export async function middleware(request: NextRequest) {
           const defaultRoute = getDefaultRouteForRole(session.role)
           return NextResponse.redirect(new URL(defaultRoute, request.url))
         } else {
-          // Sesión temporal → redirigir a onboarding o select-role
+          // Sesión temporal → redirigir a onboarding
           const redirect = getTemporarySessionRedirect(session)
           if (redirect) {
             console.log(`🔄 [MIDDLEWARE] Usuario con sesión temporal accediendo a /, redirigiendo a ${redirect}...`)
@@ -156,7 +135,7 @@ export async function middleware(request: NextRequest) {
       )
     }
 
-    // 6. Manejar rutas de sesión temporal (/onboarding, /select-role)
+    // 6. Manejar rutas de sesión temporal (/onboarding)
     if (pathname === TEMPORARY_SESSION_ROUTES.onboarding) {
       if (!session) {
         // Sin sesión → redirigir a login
@@ -183,35 +162,6 @@ export async function middleware(request: NextRequest) {
       
       // Permitir acceso a onboarding
       console.log("✅ [MIDDLEWARE] Permitiendo acceso a /onboarding")
-      return NextResponse.next()
-    }
-
-    if (pathname === TEMPORARY_SESSION_ROUTES.selectRole) {
-      if (!session) {
-        // Sin sesión → redirigir a login
-        console.log("🔐 [MIDDLEWARE] Sin sesión en /select-role, redirigiendo a login")
-        return NextResponse.redirect(new URL("/", request.url))
-      }
-      
-      if (isCompleteSession(session)) {
-        // Sesión completa → redirigir a dashboard
-        console.log("🔄 [MIDDLEWARE] Sesión completa en /select-role, redirigiendo a dashboard")
-        return NextResponse.redirect(new URL(getDefaultRouteForRole(session.role), request.url))
-      }
-      
-      if (!session.needsRoleSelection) {
-        // No necesita selección de rol → redirigir según estado
-        const redirect = getTemporarySessionRedirect(session)
-        if (redirect && redirect !== pathname) {
-          console.log(`🔄 [MIDDLEWARE] No necesita role selection, redirigiendo a ${redirect}`)
-          return NextResponse.redirect(new URL(redirect, request.url))
-        }
-        // Si no hay redirect válido, ir a login
-        return NextResponse.redirect(new URL("/", request.url))
-      }
-      
-      // Permitir acceso a select-role
-      console.log("✅ [MIDDLEWARE] Permitiendo acceso a /select-role")
       return NextResponse.next()
     }
 

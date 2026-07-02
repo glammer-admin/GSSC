@@ -16,18 +16,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import {
-  REGISTRATION_ROLE_DISPLAY_NAMES,
-  REGISTRATION_ROLE_DESCRIPTIONS,
-  type RegistrationRole,
-} from "@/lib/types/users"
 
 interface OnboardingFormProps {
   prefillData: {
     name: string
     email: string
   }
-  availableRoles: RegistrationRole[]
 }
 
 interface FormData {
@@ -38,7 +32,6 @@ interface FormData {
   country: string
   street: string
   additional_info: string
-  roles: RegistrationRole[]
 }
 
 interface FormErrors {
@@ -48,12 +41,11 @@ interface FormErrors {
   state?: string
   country?: string
   street?: string
-  roles?: string
 }
 
-export function OnboardingForm({ prefillData, availableRoles }: OnboardingFormProps) {
+export function OnboardingForm({ prefillData }: OnboardingFormProps) {
   const router = useRouter()
-  
+
   const [formData, setFormData] = useState<FormData>({
     name: prefillData.name,
     phone_number: "",
@@ -62,7 +54,6 @@ export function OnboardingForm({ prefillData, availableRoles }: OnboardingFormPr
     country: "Colombia",
     street: "",
     additional_info: "",
-    roles: ["buyer"], // Pre-seleccionado
   })
   
   const [errors, setErrors] = useState<FormErrors>({})
@@ -106,11 +97,6 @@ export function OnboardingForm({ prefillData, availableRoles }: OnboardingFormPr
       newErrors.street = "La dirección debe tener al menos 10 caracteres"
     }
 
-    // Validar roles
-    if (formData.roles.length === 0) {
-      newErrors.roles = "Debe seleccionar al menos un rol"
-    }
-
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -120,19 +106,6 @@ export function OnboardingForm({ prefillData, availableRoles }: OnboardingFormPr
     // Limpiar error del campo
     if (errors[field as keyof FormErrors]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
-    }
-  }
-
-  const handleRoleToggle = (role: RegistrationRole) => {
-    setFormData(prev => {
-      const newRoles = prev.roles.includes(role)
-        ? prev.roles.filter(r => r !== role)
-        : [...prev.roles, role]
-      return { ...prev, roles: newRoles }
-    })
-    // Limpiar error de roles
-    if (errors.roles) {
-      setErrors(prev => ({ ...prev, roles: undefined }))
     }
   }
 
@@ -191,7 +164,6 @@ export function OnboardingForm({ prefillData, availableRoles }: OnboardingFormPr
             country: formData.country.trim(),
             additional_info: formData.additional_info.trim() || undefined,
           },
-          roles: formData.roles,
         }),
       })
 
@@ -372,70 +344,6 @@ export function OnboardingForm({ prefillData, availableRoles }: OnboardingFormPr
             disabled={isLoading}
           />
         </div>
-      </div>
-
-      {/* Sección: Selección de Rol */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-foreground border-b pb-2">
-          ¿Cómo usarás la plataforma?
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Puedes seleccionar uno o más roles. Si seleccionas varios, podrás elegir con cuál ingresar.
-        </p>
-
-        <div className="space-y-3">
-          {availableRoles.map((role) => {
-            const isSelected = formData.roles.includes(role)
-            
-            return (
-              <label
-                key={role}
-                className={`
-                  flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                  ${isSelected 
-                    ? "border-primary bg-primary/5" 
-                    : "border-border hover:border-primary/50"
-                  }
-                  ${isLoading ? "opacity-50 cursor-not-allowed" : ""}
-                `}
-              >
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => handleRoleToggle(role)}
-                  disabled={isLoading}
-                  className="sr-only"
-                />
-                
-                {/* Checkbox visual */}
-                <div className={`
-                  w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0
-                  ${isSelected ? "bg-primary border-primary" : "border-muted-foreground"}
-                `}>
-                  {isSelected && (
-                    <svg className="w-3 h-3 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </div>
-
-                {/* Info del rol */}
-                <div>
-                  <span className={`font-medium ${isSelected ? "text-primary" : "text-foreground"}`}>
-                    {REGISTRATION_ROLE_DISPLAY_NAMES[role]}
-                  </span>
-                  <p className="text-sm text-muted-foreground">
-                    {REGISTRATION_ROLE_DESCRIPTIONS[role]}
-                  </p>
-                </div>
-              </label>
-            )
-          })}
-        </div>
-
-        {errors.roles && (
-          <p className="text-sm text-destructive">{errors.roles}</p>
-        )}
       </div>
 
       {/* Error general */}

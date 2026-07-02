@@ -29,9 +29,6 @@ export default async function SettingsLayout({
 
   // Verificar rol organizer
   if (session.role !== "organizer") {
-    if (session.role === "buyer") {
-      redirect("/product/1234asdf")
-    }
     redirect("/")
   }
 

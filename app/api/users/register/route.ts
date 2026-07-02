@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { 
-  getSession, 
+import {
+  getSession,
   setSessionCookie,
-  setTemporarySessionCookie,
   isTemporarySession,
 } from "@/lib/auth/session-manager"
 import { getUsersClient } from "@/lib/http/users/users-client"
 import {
   getRoleRedirectUrl,
-  getRegistrationRolesForEmail,
-  getManagementUrl,
-  isAdminDomain,
-  type RegistrationRole,
   type UserRole,
   type CreateUserDTO,
   type DeliveryAddress,
@@ -19,20 +14,22 @@ import {
 import { HttpError, NetworkError } from "@/lib/http/client"
 import { ERROR_CODES, formatErrorLog } from "@/lib/errors/error-codes"
 
+// GSSC es una app exclusiva de organizadores: todo usuario nuevo se registra
+// con este rol. Ya no se pregunta el rol en el onboarding.
+const DEFAULT_ROLE: UserRole = "organizer"
+
 // Esquema de validación del formulario
 interface RegisterFormData {
   name: string
   phone_number: string
   delivery_address: DeliveryAddress
-  roles: RegistrationRole[]
 }
 
 /**
  * Valida los datos del formulario de registro
  */
 function validateFormData(
-  data: RegisterFormData,
-  allowedRoles: readonly RegistrationRole[]
+  data: RegisterFormData
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = []
 
@@ -65,19 +62,6 @@ function validateFormData(
     }
   }
 
-  // Validar roles
-  if (!data.roles || data.roles.length === 0) {
-    errors.push("Debe seleccionar al menos un rol")
-  } else {
-    // Verificar que los roles sean válidos para este usuario (según dominio del email)
-    const invalidRoles = data.roles.filter(
-      role => !allowedRoles.includes(role)
-    )
-    if (invalidRoles.length > 0) {
-      errors.push(`Roles no válidos para registro: ${invalidRoles.join(", ")}`)
-    }
-  }
-
   return {
     valid: errors.length === 0,
     errors,
@@ -92,7 +76,7 @@ export async function POST(request: NextRequest) {
   try {
     // 1. Obtener sesión actual
     const session = await getSession()
-    
+
     if (!session) {
       console.error("❌ [REGISTER] No session found")
       return NextResponse.json(
@@ -116,19 +100,14 @@ export async function POST(request: NextRequest) {
       name: body.name,
       phone_number: body.phone_number,
       delivery_address: body.delivery_address,
-      roles: body.roles,
     }
 
     console.log("📝 [REGISTER] Registration request for:", session.email)
     console.log("📝 [REGISTER] Form data:", { ...formData, email: session.email })
 
-    // 4. Validar datos del formulario.
-    //    Los roles permitidos dependen del dominio del email de la sesión:
-    //    - Cualquier dominio: buyer/organizer.
-    //    - @glam-urban.com: además, supplier (Administrador) que dirige al portal de management.
-    //    Derivamos el dominio EXCLUSIVAMENTE de la sesión SSO (nunca del payload).
-    const allowedRoles = getRegistrationRolesForEmail(session.email)
-    const validation = validateFormData(formData, allowedRoles)
+    // 4. Validar datos del formulario. El rol no se pregunta: GSSC es exclusiva
+    //    de organizadores, así que siempre se asigna el rol `organizer`.
+    const validation = validateFormData(formData)
     if (!validation.valid) {
       console.error("❌ [REGISTER] Validation errors:", validation.errors)
       return NextResponse.json(
@@ -141,7 +120,7 @@ export async function POST(request: NextRequest) {
     const createUserData: CreateUserDTO = {
       name: formData.name.trim(),
       email: session.email, // Email viene del token SSO validado
-      role: formData.roles,
+      role: [DEFAULT_ROLE],
       phone_number: formData.phone_number.replace(/\s/g, ""),
       status: "Active",
       delivery_address: {
@@ -171,114 +150,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 7. Determinar siguiente paso según cantidad de roles
-    if (formData.roles.length === 1) {
-      // Usuario con un solo rol - crear sesión completa
-      const selectedRole = formData.roles[0]
+    // 7. Crear sesión completa como organizador y redirigir al dashboard.
+    const redirectUrl = getRoleRedirectUrl(DEFAULT_ROLE)
 
-      // Caso especial: supplier (Administrador). Solo es válido si el email pertenece
-      // al dominio admin (la validación previa ya lo asegura, pero defendemos a fondo).
-      if (selectedRole === "supplier") {
-        if (!isAdminDomain(session.email)) {
-          console.error("❌ [REGISTER] supplier role for non-admin domain")
-          return NextResponse.json(
-            { error: "Validation failed", errors: ["Rol no permitido para este dominio"] },
-            { status: 403 }
-          )
-        }
+    console.log("✅ [REGISTER] Creating complete session:", DEFAULT_ROLE)
 
-        const mgmtUrl = getManagementUrl()
-        if (!mgmtUrl) {
-          const errorCode = ERROR_CODES.ERR_GEN_000.code
-          console.error(formatErrorLog(errorCode, "MANAGEMENT_URL no configurada"))
-          return NextResponse.json(
-            {
-              error: true,
-              message: "Portal de administración no disponible.",
-              redirect: `/error?code=${errorCode}`,
-            },
-            { status: 500 }
-          )
-        }
-
-        console.log("✅ [REGISTER] Single role 'supplier', redirecting to management portal")
-
-        await setSessionCookie({
-          sub: session.sub,
-          email: session.email,
-          name: formData.name,
-          picture: session.picture,
-          provider: session.provider,
-          role: "supplier",
-          userId: createdUser.id,
-          supabaseAccessToken: session.supabaseAccessToken ?? "",
-          supabaseRefreshToken: session.supabaseRefreshToken ?? "",
-          authId: session.authId ?? "",
-        })
-
-        return NextResponse.json(
-          {
-            success: true,
-            user: {
-              id: createdUser.id,
-              email: createdUser.email,
-              name: createdUser.name,
-              role: "supplier",
-            },
-            redirect: mgmtUrl,
-          },
-          { status: 201 }
-        )
-      }
-
-      const userRole: UserRole = selectedRole
-      const redirectUrl = getRoleRedirectUrl(userRole)
-
-      console.log("✅ [REGISTER] Single role, creating complete session:", userRole)
-
-      await setSessionCookie({
-        sub: session.sub,
-        email: session.email,
-        name: formData.name,
-        picture: session.picture,
-        provider: session.provider,
-        role: userRole,
-        userId: createdUser.id,
-        supabaseAccessToken: session.supabaseAccessToken ?? "",
-        supabaseRefreshToken: session.supabaseRefreshToken ?? "",
-        authId: session.authId ?? "",
-      })
-
-      return NextResponse.json(
-        {
-          success: true,
-          user: {
-            id: createdUser.id,
-            email: createdUser.email,
-            name: createdUser.name,
-            role: userRole,
-          },
-          redirect: redirectUrl,
-        },
-        { status: 201 }
-      )
-    }
-
-    // Usuario con múltiples roles - necesita seleccionar
-    console.log("✅ [REGISTER] Multiple roles, redirecting to role selection")
-
-    await setTemporarySessionCookie({
+    await setSessionCookie({
       sub: session.sub,
       email: session.email,
       name: formData.name,
       picture: session.picture,
       provider: session.provider,
-      role: null,
-      needsRoleSelection: true,
-      availableRoles: formData.roles,
-      supabaseAccessToken: session.supabaseAccessToken,
-      supabaseRefreshToken: session.supabaseRefreshToken,
-      authId: session.authId,
+      role: DEFAULT_ROLE,
+      userId: createdUser.id,
+      supabaseAccessToken: session.supabaseAccessToken ?? "",
+      supabaseRefreshToken: session.supabaseRefreshToken ?? "",
+      authId: session.authId ?? "",
     })
 
     return NextResponse.json(
@@ -288,23 +175,22 @@ export async function POST(request: NextRequest) {
           id: createdUser.id,
           email: createdUser.email,
           name: createdUser.name,
+          role: DEFAULT_ROLE,
         },
-        needsRoleSelection: true,
-        availableRoles: formData.roles,
-        redirect: "/select-role",
+        redirect: redirectUrl,
       },
       { status: 201 }
     )
 
   } catch (error) {
     console.error("❌ [REGISTER] Error:", error)
-    
+
     // Error de red - redirigir a página de error
     if (error instanceof NetworkError) {
       const errorCode = ERROR_CODES.REG_NET_001.code
       console.error(formatErrorLog(errorCode, error.message))
       return NextResponse.json(
-        { 
+        {
           error: true,
           message: ERROR_CODES.REG_NET_001.userMessage,
           redirect: `/error?code=${errorCode}`
@@ -312,13 +198,13 @@ export async function POST(request: NextRequest) {
         { status: 503 }
       )
     }
-    
+
     // Error del servidor - redirigir a página de error
     if (error instanceof HttpError && error.status >= 500) {
       const errorCode = ERROR_CODES.REG_SRV_001.code
       console.error(formatErrorLog(errorCode, `HTTP ${error.status}: ${error.statusText}`))
       return NextResponse.json(
-        { 
+        {
           error: true,
           message: ERROR_CODES.REG_SRV_001.userMessage,
           redirect: `/error?code=${errorCode}`
@@ -326,27 +212,27 @@ export async function POST(request: NextRequest) {
         { status: 503 }
       )
     }
-    
+
     const errorMessage = error instanceof Error ? error.message : "Failed to register user"
-    
+
     // Verificar si es error de duplicado - mostrar inline (usuario puede corregir)
     if (errorMessage.includes("duplicate") || errorMessage.includes("unique")) {
       const errorCode = ERROR_CODES.REG_DUP_001.code
       console.error(formatErrorLog(errorCode, errorMessage))
       return NextResponse.json(
-        { 
-          error: ERROR_CODES.REG_DUP_001.userMessage, 
-          code: errorCode 
+        {
+          error: ERROR_CODES.REG_DUP_001.userMessage,
+          code: errorCode
         },
         { status: 409 }
       )
     }
-    
+
     // Error genérico - redirigir a página de error
     const errorCode = ERROR_CODES.ERR_GEN_000.code
     console.error(formatErrorLog(errorCode, errorMessage))
     return NextResponse.json(
-      { 
+      {
         error: true,
         message: ERROR_CODES.ERR_GEN_000.userMessage,
         redirect: `/error?code=${errorCode}`
@@ -355,4 +241,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
