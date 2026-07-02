@@ -31,8 +31,8 @@ const mockUsers = {
   },
   meta: {
     sub: "mock_meta_11111",
-    email: "pagador@example.com",
-    name: "Carlos Pagador",
+    email: "organizador.meta@example.com",
+    name: "Carlos Organizador",
     picture: "https://api.dicebear.com/7.x/avataaars/svg?seed=meta",
     email_verified: true,
   },

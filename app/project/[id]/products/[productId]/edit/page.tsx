@@ -131,9 +131,6 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
     if (session.needsOnboarding) {
       redirect("/onboarding")
     }
-    if (session.needsRoleSelection) {
-      redirect("/select-role")
-    }
     redirect("/")
   }
   

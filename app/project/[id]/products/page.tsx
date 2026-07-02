@@ -119,9 +119,6 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
     if (session.needsOnboarding) {
       redirect("/onboarding")
     }
-    if (session.needsRoleSelection) {
-      redirect("/select-role")
-    }
     notFound()
   }
   

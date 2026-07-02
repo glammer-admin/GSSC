@@ -6,9 +6,8 @@ import type { UserRole } from "@/lib/types/users"
  * Información del usuario extraída de la sesión.
  * Disponible en Server Components y API Routes.
  *
- * `role` cubre solo los roles válidos de GSSC (buyer/organizer).
- * El rol admin (supplier) se gestiona en gssc-management y no llega acá:
- * el middleware corta esa sesión antes de pasar.
+ * `role` cubre el único rol válido de GSSC (`organizer`). Cualquier otro rol
+ * (buyer/supplier legacy) se ignora: esos usuarios no pertenecen a esta app.
  */
 export interface ServerUser {
   sub: string
@@ -31,8 +30,8 @@ export async function getCurrentUser(): Promise<ServerUser | null> {
       return null
     }
 
-    // Defensive: si la sesión legada trae role distinto a buyer/organizer, ignorar.
-    if (session.role !== "buyer" && session.role !== "organizer") {
+    // Defensive: si la sesión trae un role distinto a organizer (buyer/supplier legacy), ignorar.
+    if (session.role !== "organizer") {
       return null
     }
 
@@ -92,7 +91,7 @@ export async function getUserFromHeaders(): Promise<ServerUser | null> {
       return null
     }
 
-    if (role !== "buyer" && role !== "organizer") {
+    if (role !== "organizer") {
       return null
     }
 

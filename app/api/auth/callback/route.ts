@@ -4,16 +4,13 @@ import {
   setSessionCookie,
   setTemporarySessionCookie,
   deleteSession,
-  type SessionRole
 } from "@/lib/auth/session-manager"
 import { upsertSupabaseAuthUser } from "@/lib/auth/supabase-admin"
 import { getUsersClient } from "@/lib/http/users/users-client"
 import {
   getRoleRedirectUrl,
-  getManagementUrl,
   isAdminDomain,
   toGsscRoles,
-  type UserRole
 } from "@/lib/http/users/types"
 import { HttpError, NetworkError } from "@/lib/http/client"
 import { ERROR_CODES, formatErrorLog } from "@/lib/errors/error-codes"
@@ -70,6 +67,22 @@ export async function POST(request: NextRequest) {
       console.error("❌ [AUTH CALLBACK] Email not verified for Google")
       return NextResponse.json(
         { error: "Email not verified" },
+        { status: 403 }
+      )
+    }
+
+    // 4a. GSSC es una app exclusiva de organizadores. Los emails del dominio
+    //     interno/admin (@glam-urban.com) NO pueden iniciar sesión aquí.
+    //     El dominio se deriva del email firmado por el proveedor SSO, nunca del payload.
+    if (isAdminDomain(email)) {
+      console.error("❌ [AUTH CALLBACK] Login bloqueado para dominio admin:", email)
+      await deleteSession()
+      return NextResponse.json(
+        {
+          error: true,
+          message: "Este dominio no tiene acceso a GSSC.",
+          redirect: "/error?code=AUTH_VAL_001",
+        },
         { status: 403 }
       )
     }
@@ -177,72 +190,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Usuario existe en BD.
-    // El rol `supplier` (administrador) pertenece a gssc-management, no a esta app.
-    // Si el usuario tiene ese rol y un email @glam-urban.com → redirigir al portal admin.
-    // Para cualquier otro caso, filtramos `supplier` y seguimos con los roles válidos de GSSC.
+    // Usuario existe en BD. GSSC es exclusiva de organizadores: filtramos a los roles
+    // válidos de GSSC (solo `organizer`). Cualquier otro rol legacy (buyer/supplier) se
+    // ignora — esos usuarios no pertenecen a esta app.
     const dbRoles: string[] = Array.isArray(dbUser.role) ? dbUser.role : []
-    const hasSupplierRole = dbRoles.includes("supplier")
-
-    if (hasSupplierRole && isAdminDomain(email)) {
-      console.log("👤 [AUTH CALLBACK] Admin role detected for @glam-urban user, redirecting to management portal")
-      const mgmtUrl = getManagementUrl()
-      if (!mgmtUrl) {
-        await deleteSession()
-        const errorCode = ERROR_CODES.ERR_GEN_000.code
-        console.error(formatErrorLog(errorCode, "MANAGEMENT_URL no configurada"))
-        return NextResponse.json(
-          {
-            error: true,
-            message: "Portal de administración no disponible.",
-            redirect: `/error?code=${errorCode}`,
-          },
-          { status: 500 }
-        )
-      }
-
-      if (!dbUser.auth_id) {
-        try {
-          const usersClient = getUsersClient()
-          await usersClient.updateUser(dbUser.id, { auth_id: supabaseSession.authId })
-          console.log("✅ [AUTH CALLBACK] Backfilled auth_id on glam_users (supplier)")
-        } catch (err) {
-          console.warn("⚠️ [AUTH CALLBACK] Could not backfill auth_id:", err)
-        }
-      }
-
-      // Persistir la cookie con role=supplier en el dominio compartido (.glam-urban.dev)
-      // para que gssc-management la lea con el mismo SESSION_SECRET.
-      await setSessionCookie({
-        sub,
-        email,
-        name,
-        picture,
-        provider,
-        role: "supplier",
-        userId: dbUser.id,
-        supabaseAccessToken: supabaseSession.accessToken,
-        supabaseRefreshToken: supabaseSession.refreshToken,
-        authId: supabaseSession.authId,
-      })
-
-      return NextResponse.json(
-        {
-          success: true,
-          user: { sub, email, name, picture, role: "supplier", userId: dbUser.id },
-          redirect: mgmtUrl,
-        },
-        { status: 200 }
-      )
-    }
-
     const userRoles = toGsscRoles(dbRoles)
     console.log("👤 [AUTH CALLBACK] Existing user found, db roles:", dbRoles, "effective GSSC roles:", userRoles)
 
     if (dbRoles.length > 0 && userRoles.length === 0) {
-      // Edge: usuario tenía solo `supplier` en DB pero su email no es @glam-urban.com.
-      // No tiene ningún rol válido para GSSC y no es admin interno. Cerrar sesión.
-      console.error("❌ [AUTH CALLBACK] User has no valid roles for this domain", { email, dbRoles })
+      // Edge: usuario existente en DB pero sin el rol `organizer` (p. ej. buyer/supplier
+      // legacy). No tiene ningún rol válido para GSSC. Cerrar sesión.
+      console.error("❌ [AUTH CALLBACK] User has no valid roles for this platform", { email, dbRoles })
       await deleteSession()
       return NextResponse.json(
         {
@@ -282,77 +240,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (userRoles.length === 1) {
-      // CASO: Usuario con un solo rol - acceso directo
-      const userRole = userRoles[0]
-      const redirectUrl = getRoleRedirectUrl(userRole)
+    // CASO: Usuario organizador existente - acceso directo. GSSC solo tiene el rol
+    // `organizer`, así que no hay selección de rol posible.
+    const userRole = userRoles[0]
+    const redirectUrl = getRoleRedirectUrl(userRole)
 
-      console.log("✅ [AUTH CALLBACK] Single role user, assigning role:", userRole)
-
-      // Backfill auth_id on glam_users if not set yet
-      if (!dbUser.auth_id) {
-        try {
-          const usersClient = getUsersClient()
-          await usersClient.updateUser(dbUser.id, { auth_id: supabaseSession.authId })
-          console.log("✅ [AUTH CALLBACK] Backfilled auth_id on glam_users")
-        } catch (err) {
-          console.warn("⚠️ [AUTH CALLBACK] Could not backfill auth_id:", err)
-        }
-      }
-
-      await setSessionCookie({
-        sub,
-        email,
-        name,
-        picture,
-        provider,
-        role: userRole,
-        userId: dbUser.id,
-        supabaseAccessToken: supabaseSession.accessToken,
-        supabaseRefreshToken: supabaseSession.refreshToken,
-        authId: supabaseSession.authId,
-      })
-
-      return NextResponse.json(
-        {
-          success: true,
-          user: {
-            sub,
-            email,
-            name,
-            picture,
-            role: userRole,
-            userId: dbUser.id,
-          },
-          redirect: redirectUrl,
-        },
-        { status: 200 }
-      )
-    }
-
-    // CASO: Usuario con múltiples roles - necesita seleccionar
-    console.log("👤 [AUTH CALLBACK] Multiple roles detected, redirecting to role selection")
+    console.log("✅ [AUTH CALLBACK] Organizer user, assigning role:", userRole)
 
     // Backfill auth_id on glam_users if not set yet
     if (!dbUser.auth_id) {
       try {
         const usersClient = getUsersClient()
         await usersClient.updateUser(dbUser.id, { auth_id: supabaseSession.authId })
-        console.log("✅ [AUTH CALLBACK] Backfilled auth_id on glam_users (multi-role)")
+        console.log("✅ [AUTH CALLBACK] Backfilled auth_id on glam_users")
       } catch (err) {
         console.warn("⚠️ [AUTH CALLBACK] Could not backfill auth_id:", err)
       }
     }
 
-    await setTemporarySessionCookie({
+    await setSessionCookie({
       sub,
       email,
       name,
       picture,
       provider,
-      role: null,
-      needsRoleSelection: true,
-      availableRoles: userRoles,
+      role: userRole,
+      userId: dbUser.id,
       supabaseAccessToken: supabaseSession.accessToken,
       supabaseRefreshToken: supabaseSession.refreshToken,
       authId: supabaseSession.authId,
@@ -361,10 +274,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        user: { sub, email, name, picture },
-        needsRoleSelection: true,
-        availableRoles: userRoles,
-        redirect: "/select-role",
+        user: {
+          sub,
+          email,
+          name,
+          picture,
+          role: userRole,
+          userId: dbUser.id,
+        },
+        redirect: redirectUrl,
       },
       { status: 200 }
     )

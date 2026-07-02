@@ -1,7 +1,6 @@
 import {
   Home,
   DollarSign,
-  History,
   Settings,
   type LucideIcon,
 } from "lucide-react"
@@ -18,9 +17,7 @@ export interface MenuConfig {
   [key: string]: MenuItem[]
 }
 
-// Configuración de menús por rol
-// Roles: buyer (Comprador), organizer (Organizador)
-// El rol admin (supplier) vive en gssc-management, no en esta app.
+// Configuración de menús por rol. GSSC es exclusiva de organizadores.
 export const menuConfig: MenuConfig = {
   organizer: [
     {
@@ -43,15 +40,6 @@ export const menuConfig: MenuConfig = {
       label: "Configuración",
       href: "/settings/billing",
       roles: ["organizer"],
-    },
-  ],
-  buyer: [
-    {
-      id: "historial",
-      icon: History,
-      label: "Historial",
-      href: "/product/1234asdf",
-      roles: ["buyer"],
     },
   ],
 }
