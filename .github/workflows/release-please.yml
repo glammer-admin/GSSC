@@ -1,0 +1,21 @@
+name: release-please
+
+# Genera versiones automáticas a partir de Conventional Commits (feat:/fix:) en develop.
+# Mantiene un PR de release abierto; al mergearlo crea tag vX.Y.Z + GitHub Release
+# y actualiza package.json + CHANGELOG.md.
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          target-branch: develop
+          release-type: node

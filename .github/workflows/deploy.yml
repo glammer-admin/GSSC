@@ -1,13 +1,20 @@
 name: Deploy frontend (Cloudflare)
 
+# main -> PRODUCCIÓN (worker -prod, dominio .com) | develop -> DEV (worker default, dominio .dev)
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Resuelve vars/secrets del GitHub Environment según la rama
+    environment: ${{ github.ref_name == 'main' && 'production' || 'dev' }}
     # Necesario para que npm ci pueda leer @glammer-admin/gssc-authn de GitHub Packages
     permissions:
       contents: read
@@ -49,4 +56,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
+          command: deploy ${{ github.ref_name == 'main' && '--env production' || '' }}
