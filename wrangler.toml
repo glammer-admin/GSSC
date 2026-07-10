@@ -35,19 +35,21 @@ MICROSOFT_CLIENT_ID = "48205c3a-d308-4022-b21d-594114bf1594"
 # META_APP_ID       = ""           # añadir si se activa login con Meta/Facebook
 
 # ─────────────────────────────────────────────────────────────────────
-# AMBIENTES futuros (pruebas / producción).
-# Cada `[env.<x>]` necesita su propio `name`, sus `[env.<x>.vars]`, y sus
-# secrets cargados por ambiente:
-#   wrangler secret put SESSION_SECRET --env production
-#   npm run cf:deploy -- --env production
-# El ambiente por defecto (sin --env) es esta config de arriba (pruebas).
+# PRODUCCIÓN. El ambiente por defecto (arriba, sin --env) es DEV y se
+# despliega con push a `develop`. Este bloque se despliega con push a `main`.
+# OJO: los named envs NO heredan [vars] — repetir todas.
+# Secrets de este ambiente: wrangler secret put <NAME> --env production
 # ─────────────────────────────────────────────────────────────────────
-# [env.staging]
-# name = "gssc-frontend-staging"
-# [env.staging.vars]
-# SUPABASE_URL = ""
-#
-# [env.production]
-# name = "gssc-frontend-production"
-# [env.production.vars]
-# SUPABASE_URL = ""
+[env.production]
+name = "gssc-frontend-prod"
+routes = [
+  { pattern = "gssc.glam-urban.com", custom_domain = true }
+]
+
+[env.production.vars]
+SUPABASE_URL        = "https://fxojbtcthtaavdiaandm.supabase.co"
+BACKEND_API_URL     = "https://fxojbtcthtaavdiaandm.supabase.co/rest/v1/"
+BACKEND_DB_SCHEMA   = "gssc_db"
+COOKIE_DOMAIN       = ".glam-urban.com"          # sesión entre subdominios
+GOOGLE_CLIENT_ID    = "385215853597-fujcjrfsa7t5rbe2unvnb9r0v382l648.apps.googleusercontent.com"
+MICROSOFT_CLIENT_ID = "48205c3a-d308-4022-b21d-594114bf1594"
