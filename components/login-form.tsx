@@ -1,7 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Card, CardContent } from "@/components/ui/card"
 import { getDefaultRouteByRole } from "@/lib/menu-config"
 import { generateMockToken } from "@/lib/auth/mock-sso"
 import { isDevelopment } from "@/lib/config/env"
@@ -152,135 +151,146 @@ export function LoginForm() {
         </svg>
       ),
     },
-    {
-      id: "meta",
-      name: "Meta",
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0zm0 22c-5.5 0-10-4.5-10-10S6.5 2 12 2s10 4.5 10 10-4.5 10-10 10zm3.5-11c1.9 0 3.5-1.6 3.5-3.5S17.4 4 15.5 4 12 5.6 12 7.5s1.6 3.5 3.5 3.5zm-7 0c1.9 0 3.5-1.6 3.5-3.5S8.4 4 6.5 4 3 5.6 3 7.5 4.6 11 6.5 11zm3.5 8c-3.3 0-6.2-1.9-7.7-4.7.5 0 1 .1 1.5.1 2.1 0 4.1-.7 5.7-1.9 1.6 1.3 3.6 1.9 5.7 1.9.5 0 1-.1 1.5-.1-1.5 2.8-4.4 4.7-7.7 4.7z" />
-        </svg>
-      ),
-    },
   ]
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md border-2 border-primary bg-card shadow-xl">
-        <CardContent className="pt-8 pb-8">
-          {/* Logo y titulo */}
-          <div className="mb-8 text-center">
-            <div className="inline-flex items-center justify-center w-48 h-48 mb-4">
-              <img src="/logo.svg" alt="Logo" className="w-full h-full object-contain" />
-            </div>
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden p-4 bg-[linear-gradient(150deg,var(--secondary)_0%,#0d3b48_55%,#08252e_100%)]">
+      {/* Blobs decorativos — reusan --accent (amarillo) y --primary (oliva) */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(246,183,23,0.10),transparent_40%),radial-gradient(circle_at_85%_80%,rgba(85,107,47,0.22),transparent_45%)]"
+        aria-hidden="true"
+      />
+
+      <div className="relative w-full max-w-[430px] rounded-[20px] bg-card pt-11 pb-8 px-10 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.55)]">
+        {/* Logo */}
+        <div className="flex justify-center">
+          <img src="/logo-glam-urban.png" alt="GLAM URBAN" className="h-[124px] w-auto" />
+        </div>
+
+        {/* Título + subtítulo */}
+        <div className="mt-6 mb-[30px] text-center">
+          <div className="text-[22px] font-extrabold tracking-[-0.01em] text-foreground">
+            GLAM Self Service Customer
           </div>
+          <div className="mt-1.5 text-[13.5px] leading-[1.5] text-muted-foreground">
+            Plataforma de autogestión para clientes de Glam Urban.
+            <br />
+            Ingresa con tu cuenta de Google o Microsoft para continuar.
+          </div>
+        </div>
 
-          {/* Divider */}
-          <div className="mb-6 h-px bg-border"></div>
+        {/* Divider con label, estilo GBO "Single Sign-On" */}
+        <div className="mb-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+            Inicio de Sesión Único
+          </div>
+          <div className="h-px flex-1 bg-border" />
+        </div>
 
-          {/* SSO Buttons */}
-          <div className="space-y-3 mb-6">
-            {providers.map((provider) => (
-              <button
-                key={provider.id}
-                onClick={() => handleSSOLogin(provider.id)}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-secondary hover:bg-opacity-90 text-secondary-foreground rounded-lg transition-all duration-200 border-2 border-secondary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed group font-medium"
+        {/* SSO Buttons */}
+        <div className="mb-6 space-y-3">
+          {providers.map((provider) => (
+            <button
+              key={provider.id}
+              onClick={() => handleSSOLogin(provider.id)}
+              disabled={loading}
+              className="group flex w-full items-center justify-center gap-3 rounded-[11px] border-[1.5px] border-input bg-card px-[18px] py-[14px] text-[15px] font-semibold text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-150 hover:border-secondary hover:bg-muted hover:shadow-[0_4px_14px_-4px_rgba(21,84,101,0.3)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <div
+                className={`${
+                  selectedProvider === provider.id && loading
+                    ? "animate-spin"
+                    : "transition-transform group-hover:scale-110"
+                }`}
               >
-                <div
-                  className={`${
-                    selectedProvider === provider.id && loading
-                      ? "animate-spin"
-                      : "group-hover:scale-110 transition-transform"
-                  }`}
-                >
-                  {selectedProvider === provider.id && loading ? (
-                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                  ) : (
-                    provider.icon
-                  )}
-                </div>
-                <span>
-                  {selectedProvider === provider.id && loading ? "Autenticando..." : `Continuar con ${provider.name}`}
-                </span>
+                {selectedProvider === provider.id && loading ? (
+                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                ) : (
+                  provider.icon
+                )}
+              </div>
+              <span>
+                {selectedProvider === provider.id && loading ? "Autenticando..." : `Continuar con ${provider.name}`}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Success Message (e.g., registration cancelled) */}
+        {successMessage && (
+          <div className="mb-4 animate-in fade-in slide-in-from-top-2 rounded-lg border-2 border-border bg-muted p-4 duration-300">
+            <div className="flex items-start gap-3">
+              <svg
+                className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-foreground font-medium text-sm">{successMessage}</p>
+              </div>
+              <button
+                onClick={() => setSuccessMessage(null)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Cerrar mensaje"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
-            ))}
+            </div>
           </div>
+        )}
 
-          {/* Success Message (e.g., registration cancelled) */}
-          {successMessage && (
-            <div className="p-4 bg-muted border-2 border-border rounded-lg animate-in fade-in slide-in-from-top-2 duration-300 mb-4">
-              <div className="flex items-start gap-3">
-                <svg 
-                  className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
-                  />
-                </svg>
-                <div className="flex-1">
-                  <p className="text-foreground font-medium text-sm">{successMessage}</p>
-                </div>
-                <button
-                  onClick={() => setSuccessMessage(null)}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Cerrar mensaje"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+        {/* Error Message */}
+        {error && (
+          <div className="animate-in fade-in slide-in-from-top-2 rounded-lg border-2 border-destructive/50 bg-destructive/10 p-4 duration-300">
+            <div className="flex items-start gap-3">
+              <svg
+                className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-destructive font-semibold mb-1 text-sm">Error de Autenticación</p>
+                <p className="text-destructive/90 text-xs leading-relaxed">{error}</p>
               </div>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {error && (
-            <div className="p-4 bg-destructive/10 border-2 border-destructive/50 rounded-lg animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="flex items-start gap-3">
-                <svg 
-                  className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
-                  />
+              <button
+                onClick={() => setError(null)}
+                className="text-destructive/70 hover:text-destructive transition-colors"
+                aria-label="Cerrar mensaje de error"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-                <div className="flex-1">
-                  <p className="text-destructive font-semibold mb-1 text-sm">Error de Autenticación</p>
-                  <p className="text-destructive/90 text-xs leading-relaxed">{error}</p>
-                </div>
-                <button
-                  onClick={() => setError(null)}
-                  className="text-destructive/70 hover:text-destructive transition-colors"
-                  aria-label="Cerrar mensaje de error"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+              </button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
