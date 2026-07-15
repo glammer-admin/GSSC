@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/glammer-admin/GSSC/compare/v1.0.0...v1.0.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* **product:** no crashear con módulos de personalización registrados dinámicamente ([609b395](https://github.com/glammer-admin/GSSC/commit/609b395642f20434b752e216cfab01e01ad7920e))
+
 ## 1.0.0 (2026-07-11)
 
 
