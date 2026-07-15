@@ -63,6 +63,15 @@ export interface AgeCategoriesConfig {
 }
 
 /**
+ * Configuración mínima para módulos registrados desde gssc-managment
+ * que no tienen UI de configuración propia en este frontend
+ */
+export interface GenericModuleConfig {
+  enabled: boolean
+  price_modifier: number // Siempre 0 en MVP (RN-11)
+}
+
+/**
  * Configuración completa de personalización del producto
  * Inmutable después de activar el producto (RN-13)
  */
@@ -474,9 +483,15 @@ export const VISUAL_MODES = [
 ] as const
 
 /**
- * Módulos de personalización con labels
+ * Módulos de personalización con labels.
+ * Solo cubre los módulos con UI de configuración propia: el backend permite
+ * registrar códigos nuevos desde gssc-managment (migración 20260625000001),
+ * así que todo lookup debe tratarse como opcional y usar name/description
+ * del backend como fallback.
  */
-export const PERSONALIZATION_MODULES_CONFIG = {
+export const PERSONALIZATION_MODULES_CONFIG: Partial<
+  Record<PersonalizationModuleCode, { label: string; description: string }>
+> = {
   numbers: {
     label: "Número deportivo",
     description: "Permite agregar número en la espalda (1-99)",
@@ -489,7 +504,7 @@ export const PERSONALIZATION_MODULES_CONFIG = {
     label: "Categoría de edad",
     description: "Permite seleccionar categoría (infantil, juvenil, adulto)",
   },
-} as const
+}
 
 /**
  * Opciones de categoría de edad por defecto
@@ -610,7 +625,7 @@ export function validateModulesForCategory(
     if (moduleConfig?.enabled && !allowedModules.includes(module)) {
       return {
         valid: false,
-        error: `El módulo "${PERSONALIZATION_MODULES_CONFIG[module].label}" no está permitido para esta categoría`,
+        error: `El módulo "${PERSONALIZATION_MODULES_CONFIG[module]?.label ?? module}" no está permitido para esta categoría`,
       }
     }
   }
@@ -831,7 +846,7 @@ export function createEmptyPersonalizationConfig(): PersonalizationConfig {
  */
 export function createDefaultModuleConfig(
   moduleCode: PersonalizationModuleCode
-): NumbersConfig | NamesConfig | AgeCategoriesConfig {
+): NumbersConfig | NamesConfig | AgeCategoriesConfig | GenericModuleConfig {
   switch (moduleCode) {
     case "numbers":
       return {
@@ -850,6 +865,13 @@ export function createDefaultModuleConfig(
       return {
         enabled: true,
         options: [...DEFAULT_AGE_CATEGORY_OPTIONS],
+        price_modifier: 0,
+      }
+    default:
+      // Módulo registrado desde gssc-managment: en runtime pueden llegar
+      // códigos fuera del union PersonalizationModuleCode
+      return {
+        enabled: true,
         price_modifier: 0,
       }
   }

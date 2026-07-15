@@ -128,6 +128,8 @@ export function PersonalizationConfig({
         const moduleConfig = config[module.code]
         const isEnabled = moduleConfig?.enabled ?? false
         const moduleInfo = PERSONALIZATION_MODULES_CONFIG[module.code]
+        const label = moduleInfo?.label ?? module.name
+        const description = moduleInfo?.description ?? module.description
 
         return (
           <div key={module.code} className="border rounded-lg p-4 space-y-4">
@@ -135,11 +137,13 @@ export function PersonalizationConfig({
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label className="text-base font-medium">
-                  {moduleInfo.label}
+                  {label}
                 </Label>
-                <p className="text-sm text-muted-foreground">
-                  {moduleInfo.description}
-                </p>
+                {description && (
+                  <p className="text-sm text-muted-foreground">
+                    {description}
+                  </p>
+                )}
               </div>
               <Switch
                 checked={isEnabled}
