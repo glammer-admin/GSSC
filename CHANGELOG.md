@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/glammer-admin/GSSC/compare/v1.0.1...v1.1.0) (2026-08-27)
+
+
+### Features
+
+* remove Pagos button from sidebar ([0821b82](https://github.com/glammer-admin/GSSC/commit/0821b8248b01845f7978717620d3d3b1cced4327))
+* remove Pagos button from sidebar ([89462cc](https://github.com/glammer-admin/GSSC/commit/89462ccccc96c75bd364e487c245fa5438a68b7d))
+
 ## [1.0.1](https://github.com/glammer-admin/GSSC/compare/v1.0.0...v1.0.1) (2026-07-15)
 
 
