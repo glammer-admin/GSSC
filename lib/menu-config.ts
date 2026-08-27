@@ -1,6 +1,5 @@
 import {
   Home,
-  DollarSign,
   Settings,
   type LucideIcon,
 } from "lucide-react"
@@ -25,13 +24,6 @@ export const menuConfig: MenuConfig = {
       icon: Home,
       label: "Dashboard",
       href: "/dashboard",
-      roles: ["organizer"],
-    },
-    {
-      id: "pagos",
-      icon: DollarSign,
-      label: "Pagos",
-      href: "/dashboard/payments",
       roles: ["organizer"],
     },
     {
