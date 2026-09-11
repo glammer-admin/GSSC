@@ -13,6 +13,7 @@ import {
   validateModulesForCategory,
   ensureAllModulesPresent,
   MIN_IMAGES_FOR_ACTIVATION,
+  GLAM_PRODUCT_UNAVAILABLE_ERROR,
 } from "@/lib/types/product/types"
 import type {
   UpdateProductInput,
@@ -280,6 +281,16 @@ export async function PATCH(
         if (!glamProduct) {
           return NextResponse.json(
             { success: false, error: "GLAM_PRODUCT_NOT_FOUND" },
+            { status: 400 }
+          )
+        }
+
+        // Solo se bloquea el cambio HACIA un producto inactivo: un borrador
+        // que ya usaba un producto que después se desactivó tiene que poder
+        // seguir guardándose (el formulario reenvía el mismo id).
+        if (!glamProduct.is_active && input.glamProductId !== currentProduct.glam_product_id) {
+          return NextResponse.json(
+            { success: false, error: GLAM_PRODUCT_UNAVAILABLE_ERROR },
             { status: 400 }
           )
         }

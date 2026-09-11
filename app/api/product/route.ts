@@ -13,6 +13,7 @@ import {
   toProductCategory,
   toProductImage,
   toGlamProduct,
+  GLAM_PRODUCT_UNAVAILABLE_ERROR,
 } from "@/lib/types/product/types"
 import type { CreateProductInput, SaveProductResponse, ProductListResponse, CategoryListResponse, GlamProductListResponse } from "@/lib/types/product/types"
 
@@ -275,6 +276,16 @@ export async function POST(
     if (!glamProduct) {
       return NextResponse.json(
         { success: false, error: "Producto del catálogo no encontrado" },
+        { status: 400 }
+      )
+    }
+
+    // La lista del formulario ya oculta los inactivos, pero la API no puede
+    // depender de eso: un formulario abierto antes de que el admin lo
+    // desactivara (o un llamado directo) lo seguiría usando.
+    if (!glamProduct.is_active) {
+      return NextResponse.json(
+        { success: false, error: GLAM_PRODUCT_UNAVAILABLE_ERROR },
         { status: 400 }
       )
     }
