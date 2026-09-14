@@ -434,6 +434,12 @@ export const MAX_IMAGE_SIZE_MB = 10
 export const MIN_IMAGES_FOR_ACTIVATION = 3
 
 /**
+ * Producto del catálogo desactivado en gssc-managment: no se puede usar para
+ * crear un producto nuevo ni para cambiar el de un borrador.
+ */
+export const GLAM_PRODUCT_UNAVAILABLE_ERROR = "Este producto del catálogo ya no está disponible"
+
+/**
  * Longitud máxima del nombre del producto
  */
 export const MAX_PRODUCT_NAME_LENGTH = 200
