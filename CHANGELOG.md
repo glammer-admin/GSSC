@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/glammer-admin/GSSC/compare/v1.1.0...v1.1.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* **product:** no crear ni cambiar a un producto del catálogo desactivado ([774495e](https://github.com/glammer-admin/GSSC/commit/774495e46a7039f18149055ebd43ca74d9df6ab3))
+* **product:** no crear ni cambiar a un producto del catálogo desactivado ([ff70f62](https://github.com/glammer-admin/GSSC/commit/ff70f629992b39df398204faee0caeb751f2a933))
+
 ## [1.1.0](https://github.com/glammer-admin/GSSC/compare/v1.0.1...v1.1.0) (2026-08-27)
 
 
